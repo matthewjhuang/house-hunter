@@ -1,0 +1,226 @@
+# House Hunter
+
+Our shared board for Melbourne rentals. Paste (or share) a realestate.com.au or Domain
+listing, and it becomes a card that moves through
+**Saved → Inspection booked → Inspected → Applied → Approved → Lease signed** (or
+**Rejected**, with a reason, restorable any time). Each card has a comment thread, an
+inspection checklist, the agent's details and a reminder before each booked inspection.
+Whatever one of us does shows up live on the other's phone.
+
+It's an installable web app (PWA) designed to feel like a native iPhone app, and it's built
+the same way as Life OS: plain HTML, CSS and ES modules, no framework and no build step.
+
+- **Live app:** https://matthewjhuang.github.io/house-hunter/
+- **Backend:** Supabase project `HouseHunter` (`esifddbuuyztqcqqebgx`, Sydney)
+
+Application documents (ID, payslips, references) are never stored here — only listing
+details, notes and links. Photos are kept as links to the listing site's own images.
+
+---
+
+## Project layout
+
+```
+index.html            App shell, sign-in, tab bar, SVG icon set
+css/styles.css        iOS-style tokens (light/dark), components
+js/app.js             Boot, sign-in, hash routing, tabs
+js/store.js           In-memory data + Supabase Realtime; all writes go through here
+js/board.js           Board tab (stage picker + paged columns / side-by-side columns)
+js/propertySheet.js   Property detail sheet: photos, inspections, checklist, comments
+js/editSheet.js       Edit / add-by-hand sheet
+js/addSheet.js        Paste-a-link sheet → parse-listing
+js/actions.js         Move / reject / restore / delete, shared by the board and sheet
+js/settings.js        Settings tab, Shortcut token
+js/push.js            Web Push subscribe / unsubscribe / test
+js/onboarding.js      Add to Home Screen + reminders prompts
+js/ui.js              Sheets, context menus, alerts, toasts, long-press, swipe rows
+js/format.js          Stages, reasons, money/date formatting, address normalising
+js/demo.js            Sample data for local design testing (not deployed)
+service-worker.js     App-shell cache + push notifications (bump CACHE_NAME each release)
+manifest.json         PWA manifest, incl. share_target for Android
+supabase/migrations/  Database schema, applied in order
+supabase/functions/   Edge Functions (Deno)
+docs/PLAN.md          The Phase 1 plan
+BUILD_LOG.md          What was built and why, stage by stage
+```
+
+Routes are hash-based so GitHub Pages never sees them and refreshes always work:
+`#/board`, `#/p/<id>`, `#/add?url=…`, `#/map`, `#/places`, `#/settings`. Plain
+`?url=…` links (and Android's share target) are turned into `#/add` on load.
+
+## Run it locally
+
+```bash
+python3 -m http.server 5501
+```
+
+- `http://localhost:5501/#demo` — the whole UI with sample data, no sign-in. Nothing is saved.
+- `http://localhost:5501/` — the real app against Supabase. Add `http://localhost:5501` to
+  Supabase → Authentication → URL Configuration → Redirect URLs if you want the email link
+  (not just the code) to work locally.
+
+The service worker caches the app shell, so after editing files reload twice (or tick
+"Update on reload" in DevTools → Application → Service Workers).
+
+---
+
+## Setup (already done, except where marked ✋)
+
+### 1. Supabase database
+
+The schema lives in `supabase/migrations/` and has been applied to the `HouseHunter`
+project. To rebuild from scratch, run the files in order in the SQL Editor (or
+`supabase db push` with the Supabase CLI).
+
+- Every table has Row Level Security. Rows belong to a `household_id`, and policies only
+  allow the signed-in person's own household (`private.my_household_id()`).
+- **Invites:** a trigger on `auth.users` only lets emails in `household_invites` create an
+  account, and adds them to that household. The household and both invites are created by
+  the first migration. To change an email:
+  `update household_invites set email = 'new@example.com' where email = 'old@example.com';`
+- New cards get the 11-item inspection checklist automatically.
+- `pg_cron` runs `send-reminders` every 5 minutes and `recheck-listings` daily at 19:00 UTC
+  (5–6am Melbourne). They authenticate with a random secret stored in Supabase Vault.
+
+### 2. ✋ Auth settings (Supabase dashboard → Authentication)
+
+1. **URL Configuration** → Site URL: `https://matthewjhuang.github.io/house-hunter/`.
+   Add the same URL under Redirect URLs.
+2. **Emails → Templates**: edit both **Magic Link** and **Confirm signup** so they include
+   the code as well as the link. For example, for the body:
+   ```html
+   <h2>Your House Hunter code</h2>
+   <p style="font-size:28px;letter-spacing:4px"><strong>{{ .Token }}</strong></p>
+   <p>Type this code into House Hunter. Or, if you're in a browser, <a href="{{ .ConfirmationURL }}">tap here to sign in</a>.</p>
+   ```
+   Why: on iPhone, a link in an email opens Safari, which can't sign in the installed
+   Home Screen app. The code works everywhere.
+3. **Emails → SMTP Settings** (important): Supabase's built-in email only delivers to
+   members of your Supabase organisation, and only a couple per hour. Hannah won't get a
+   code until you either
+   - turn on **custom SMTP** — e.g. Gmail: host `smtp.gmail.com`, port `587`, username your
+     Gmail address, password a Google [App Password](https://myaccount.google.com/apppasswords),
+     sender your Gmail address; or
+   - invite Hannah to the Supabase organisation (Organization → Team).
+
+   Custom SMTP is the better long-term option.
+
+### 3. ✋ Push notifications (VAPID keys)
+
+The key pair was generated locally into `supabase/vapid.local` (git-ignored). In Supabase →
+Edge Functions → **Secrets**, add:
+
+| Name | Value |
+| --- | --- |
+| `VAPID_PUBLIC_KEY` | from `supabase/vapid.local` |
+| `VAPID_PRIVATE_KEY` | from `supabase/vapid.local` |
+| `VAPID_SUBJECT` | `mailto:matthewjhuang@gmail.com` |
+
+The public key is also in `js/supabaseClient.js` (`VAPID_PUBLIC_KEY`) — if you ever
+regenerate the pair (`npx web-push generate-vapid-keys`), update both, and everyone has to
+turn notifications off and on again in Settings. Until the secrets are set,
+`send-reminders` replies "VAPID keys aren't set yet" and sends nothing.
+
+### 4. Edge Functions
+
+All four are deployed. To redeploy after changes (Supabase CLI):
+
+```bash
+supabase functions deploy parse-listing --project-ref esifddbuuyztqcqqebgx
+```
+
+```bash
+supabase functions deploy share-listing recheck-listings send-reminders --no-verify-jwt --project-ref esifddbuuyztqcqqebgx
+```
+
+| Function | Called by | Auth |
+| --- | --- | --- |
+| `parse-listing` | the app's Add sheet | signed-in session (JWT verified) |
+| `share-listing` | the iOS Shortcut | personal token from Settings (hash stored) |
+| `recheck-listings` | pg_cron, daily | `x-cron-secret` from Vault |
+| `send-reminders` | pg_cron every 5 min; Settings → "Send a Test Notification" | `x-cron-secret`, or session for the test |
+
+**How listing import works.** The function fetches the page and reads, in order: JSON-LD;
+embedded app data (Domain's `__NEXT_DATA__` by its exact shape, REA's `ArgonautExchange`
+generically); then Open Graph / meta tags and page text. Duplicate properties (the same
+rental on REA and Domain) are merged on a normalised address (`3/12 smith st brunswick`),
+keeping both links.
+
+**Expect blocking.** Both sites usually refuse requests from servers (in testing: Domain 403,
+REA 429). That's handled: the card is still created with the link, marked "Needs details",
+and the edit sheet opens with the missing fields highlighted. The iOS Shortcut can also
+fetch the page on your phone (step 4 below), which the sites block far less often; the
+server parses that HTML when its own request is refused.
+
+There's a parse-only test mode, handy if a site changes its layout: save a listing page
+and send `{ "dry_run": true, "html": "<page html>" }` to `parse-listing` with the anon key.
+
+### 5. ✋ GitHub Pages
+
+Repo → **Settings → Pages → Build and deployment → Source: GitHub Actions**. After that,
+every push to `main` deploys via `.github/workflows/deploy.yml`.
+
+---
+
+## On your iPhones
+
+1. Open https://matthewjhuang.github.io/house-hunter/ in **Safari**.
+2. Share → **Add to Home Screen** → Add. Open House Hunter from the Home Screen.
+3. Sign in with your email and type the code from the email.
+4. Tap **Turn On Reminders** when asked (or Settings → Notifications). iPhone only allows
+   notifications for Home Screen apps, iOS 16.4 or later.
+5. Settings → Budget: set your max rent per week. Cards above it show "Over budget".
+
+## iOS Shortcut: share from the REA and Domain apps
+
+iPhone doesn't let web apps appear in the Share Sheet, so a Shortcut does it: it sends the
+listing to House Hunter in the background and the card appears on both boards.
+
+1. In House Hunter: **Settings → Share from REA & Domain → Create Your Shortcut Token**.
+   Copy the token (it's shown once) and the endpoint:
+   `https://esifddbuuyztqcqqebgx.supabase.co/functions/v1/share-listing`
+2. Open the **Shortcuts** app → **+** → name it **Add to House Hunter**.
+3. Tap the name at the top → **Details** → turn on **Show in Share Sheet**. Under
+   "Receive", choose **URLs** and **Text**.
+4. Add the action **Get URLs from Input** (input: *Shortcut Input*).
+5. *(Optional, recommended for realestate.com.au)* Add **Get Contents of URL** with the
+   *URLs* from step 4, method **GET**. This reads the listing on your phone.
+6. Add another **Get Contents of URL**:
+   - URL: the endpoint from step 1
+   - Method: **POST**
+   - Headers: `Authorization` → `Bearer YOUR-TOKEN` (the word Bearer, a space, the token)
+   - Request Body: **JSON** — key `url` (Text) → *URLs* from step 4.
+     If you did step 5, add key `html` (Text) → *Contents of URL* from step 5.
+7. Add **Show Notification** → *Contents of URL* (from step 6). It'll say e.g.
+   "Added 48 Fraser Street, Brunswick" or "Saved the link from realestate.com.au: add the
+   details in House Hunter".
+
+To use it: open a listing in the REA or Domain app → **Share** → **Add to House Hunter**.
+
+Lost the token, or a phone? Settings → **Make a New Token** (the old one stops working) or
+**Revoke Token**.
+
+Other deep links: `https://matthewjhuang.github.io/house-hunter/#/add?url=<listing url>`
+opens the Add sheet and imports straight away (in a browser, or on Android). Android's
+Share menu lists House Hunter once it's installed (`share_target` in the manifest).
+
+---
+
+## Phase 2 (not built yet)
+
+Map and Places tabs currently show a "Coming in Phase 2" screen. Planned: essential places
+per person, nearest train/tram stop with walking time, car and public transport times for
+a weekday 8:30am arrival via the Google Routes API (server-side key, results cached in a
+`travel_times` table), and a map of active properties coloured by stage. That needs two
+Google Maps Platform keys (a server key as a Supabase secret, and a browser key restricted to
+`matthewjhuang.github.io`).
+
+## Things to know
+
+- **Free-tier pausing:** free Supabase projects pause after a week with no activity. If
+  the app ever shows "Couldn't load your board", check the Supabase dashboard and restore
+  the project.
+- **Daily re-check** only flags changes it can see. While a site is blocking server
+  requests, its listings aren't re-checked (they're never wrongly marked removed).
+- After changing any file the app loads, bump `CACHE_NAME` in `service-worker.js` so phones
+  pick up the new version.
