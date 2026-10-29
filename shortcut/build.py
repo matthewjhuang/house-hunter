@@ -9,13 +9,15 @@ What it does when you share a listing:
   0. Text: your House Hunter token (asked once, when the Shortcut is added)
   1-2. Get URLs from Input, first one: the link, whether a Safari page, a link or text
      was shared (the text of a Safari page is only its title)
-  3. Get Type of what was shared
-  4. If it's a Safari web page: 5. Run JavaScript on it to read the page exactly as
-     you're seeing it (the sites can't block this — it's already loaded)
-  7. POST { url, html, source } to share-listing with "Bearer <token>"
-  8. Show Notification with the reply ("Filled in 4/17 Clyde Street, Kew East")
-  9. Shared from the REA/Domain apps (only a link, which the sites won't let anyone
-     read): the reply says "Opening it in Safari", so 10-11 open the listing in Safari
+  3. Get Type of what was shared, 4. Get Device Details (model)
+  5. On a Mac: 6. Run JavaScript on the active Safari tab. Mac Safari shares a plain link,
+     which the action can't take as input, so it's given none.
+  7. Otherwise, 8. if it's a Safari web page: 9. Run JavaScript on it.
+     Either way the page is read exactly as you're seeing it (the sites can't block this).
+  12. POST { url, html, source } to share-listing with "Bearer <token>"
+  13. Show Notification with the reply ("Filled in 4/17 Clyde Street, Kew East")
+  14. Shared from the REA/Domain apps (only a link, which the sites won't let anyone
+     read): the reply says "Opening it in Safari", so 15-16 open the listing in Safari
      (x-safari-https:// keeps it out of the apps) for one more Share tap.
 
 On a Mac, Safari also needs Develop → Allow JavaScript from Apple Events.
@@ -26,6 +28,9 @@ from pathlib import Path
 
 ENDPOINT = "https://esifddbuuyztqcqqebgx.supabase.co/functions/v1/share-listing"
 OBJ = "￼"  # placeholder character Shortcuts uses for a variable inside text
+
+
+READ_PAGE = "completion(document.documentElement.outerHTML);"
 
 
 def uid():
@@ -60,8 +65,8 @@ def dictionary(items):
     }
 
 
-token, links, first, kind, reply, safari_url = uid(), uid(), uid(), uid(), uid(), uid()
-outer, outer_end, reopen = uid(), uid(), uid()
+token, links, first, kind, device, reply, safari_url = uid(), uid(), uid(), uid(), uid(), uid(), uid()
+outer, inner, outer_end, reopen = uid(), uid(), uid(), uid()
 
 
 def conditional(group, mode, **params):
@@ -79,12 +84,20 @@ actions = [
      "WFWorkflowActionParameters": {"UUID": first, "WFInput": attachment(links, "URLs"), "WFItemSpecifier": "First Item"}},
     {"WFWorkflowActionIdentifier": "is.workflow.actions.getitemtype",
      "WFWorkflowActionParameters": {"UUID": kind, "WFInput": attachment(extension_input=True)}},
-    # If shared from Safari: read the page that's open.
-    conditional(outer, 0, WFCondition=99, WFConditionalActionString="Safari",
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.getdevicedetails",
+     "WFWorkflowActionParameters": {"UUID": device, "WFDeviceDetail": "Device Model"}},
+    # On a Mac: read the active Safari tab (the action takes no input there).
+    conditional(outer, 0, WFCondition=99, WFConditionalActionString="Mac",
+                WFInput={"Type": "Variable", "Variable": attachment(device, "Device Model")}),
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.runjavascriptonwebpage",
+     "WFWorkflowActionParameters": {"UUID": uid(), "WFJavaScript": READ_PAGE}},
+    conditional(outer, 1),
+    # iPhone, shared from Safari: read the shared page.
+    conditional(inner, 0, WFCondition=99, WFConditionalActionString="Safari",
                 WFInput={"Type": "Variable", "Variable": attachment(kind, "Type")}),
     {"WFWorkflowActionIdentifier": "is.workflow.actions.runjavascriptonwebpage",
-     "WFWorkflowActionParameters": {"UUID": uid(), "WFInput": attachment(extension_input=True),
-                                    "WFJavaScript": "completion(document.documentElement.outerHTML);"}},
+     "WFWorkflowActionParameters": {"UUID": uid(), "WFInput": attachment(extension_input=True), "WFJavaScript": READ_PAGE}},
+    conditional(inner, 2),
     conditional(outer, 2, uuid=outer_end),
     {"WFWorkflowActionIdentifier": "is.workflow.actions.downloadurl",
      "WFWorkflowActionParameters": {

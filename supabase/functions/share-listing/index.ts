@@ -56,6 +56,13 @@ Deno.serve(async (req) => {
     ?? html?.match(/<meta[^>]+property=["']og:url["'][^>]*content=["']([^"']+)["']/i)?.[1] ?? "";
   const url = extractUrl(raw) ?? extractUrl(pageUrl);
   if (!url) return text("House Hunter: no link found in what was shared.", 400);
+  // On a Mac the Shortcut reads the active Safari tab, which might be another page:
+  // only use a page that mentions this listing's ID.
+  const listingId = url.match(/-(\d{6,})\/?(?:[?#]|$)/)?.[1];
+  if (html && listingId && !html.includes(listingId)) {
+    console.log("share-listing ignored a page for a different listing", url);
+    html = null;
+  }
 
   // What the phone managed to read, so a blocked import can be told apart from a bad page.
   console.log("share-listing", url, "html", html ? `${html.length} chars, title: ${html.match(/<title[^>]*>([^<]{0,80})/i)?.[1] ?? "none"}` : "none");
