@@ -9,11 +9,12 @@ import { supabase, isConfigured } from "./supabaseClient.js";
 import { store, load, reset } from "./store.js";
 import { initBoard } from "./board.js";
 import { initSettings, showSettings } from "./settings.js";
+import { initPlaces } from "./places.js";
+import { initMap, showMap } from "./map.js";
 import { openProperty } from "./propertySheet.js";
 import { openAdd } from "./addSheet.js";
 import { maybeOnboard } from "./onboarding.js";
-import { navBar, collapsingTitle, currentSheet, closeMenu } from "./ui.js";
-import { icon } from "./format.js";
+import { currentSheet, closeMenu } from "./ui.js";
 
 const authEl = document.getElementById("auth");
 const appEl = document.getElementById("app");
@@ -104,10 +105,8 @@ async function showApp(user) {
   if (!booted) {
     booted = true;
     initBoard(document.getElementById("view-board"));
-    initPlaceholder(document.getElementById("view-map"), "map", "Map", "map",
-      "See every place on a map", "Pins for each rental, coloured by stage, with travel times to your essential places. Coming in Phase 2.");
-    initPlaceholder(document.getElementById("view-places"), "places", "Places", "pin",
-      "Your essential places", "Add work, the gym and the shops for each of you, then see car and public transport times on every card. Coming in Phase 2.");
+    initMap(document.getElementById("view-map"));
+    initPlaces(document.getElementById("view-places"));
     initSettings(document.getElementById("view-settings"));
   }
   route();
@@ -120,12 +119,6 @@ async function showApp(user) {
   maybeOnboard();
 }
 
-function initPlaceholder(el, id, title, glyph, heading, text) {
-  el.innerHTML = `${navBar({ id: `${id}-title`, title })}
-    <div class="empty" style="padding-top:12vh">${icon(glyph)}<h2 class="t-title3">${heading}</h2><p>${text}</p></div>`;
-  collapsingTitle(el);
-}
-
 // ---------------------------------------------------------------- routing
 
 function parseRoute() {
@@ -134,6 +127,7 @@ function parseRoute() {
   const parts = path.split("/").filter(Boolean);
   const params = new URLSearchParams(query ?? "");
   if (parts[0] === "p" && parts[1]) return { tab: "board", property: parts[1] };
+  if (parts[0] === "map" && parts[1] === "p" && parts[2]) return { tab: "map", property: parts[2] };
   if (parts[0] === "add") return { tab: "board", add: params.get("url") ?? "" };
   if (parts[0] === "settings") return { tab: "settings", section: parts[1] };
   return { tab: TABS.includes(parts[0]) ? parts[0] : "board" };
@@ -157,7 +151,7 @@ function route() {
 }
 
 function runDeferred(r) {
-  if (r.property) openProperty(r.property);
+  if (r.property) openProperty(r.property, { from: r.tab === "map" ? "map" : "board" });
   else if (r.add !== undefined) {
     history.replaceState(null, "", "#/board");
     openAdd(r.add, { autoStart: !!r.add });
@@ -181,6 +175,8 @@ function showTab(tab) {
   }
   document.title = tab === "board" ? "House Hunter" : `${tab[0].toUpperCase()}${tab.slice(1)} · House Hunter`;
   if (switching) window.scrollTo(0, scrollByTab[tab] ?? 0);
+  document.body.classList.toggle("map-tab", tab === "map");
+  if (tab === "map") showMap();
 }
 
 window.addEventListener("hashchange", () => {
@@ -214,8 +210,8 @@ async function boot() {
     appEl.hidden = false;
     booted = true;
     initBoard(document.getElementById("view-board"));
-    initPlaceholder(document.getElementById("view-map"), "map", "Map", "map", "See every place on a map", "Coming in Phase 2.");
-    initPlaceholder(document.getElementById("view-places"), "places", "Places", "pin", "Your essential places", "Coming in Phase 2.");
+    initMap(document.getElementById("view-map"));
+    initPlaces(document.getElementById("view-places"));
     initSettings(document.getElementById("view-settings"));
     loadDemo(demoData());
     route();

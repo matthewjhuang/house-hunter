@@ -1,6 +1,6 @@
 // App shell cache plus Web Push. Bump CACHE_NAME with every release that changes
 // any file below, so phones pick up the new version.
-const CACHE_NAME = "househunter-shell-v9";
+const CACHE_NAME = "househunter-shell-v10";
 
 const SHELL_FILES = [
   "./",
@@ -20,6 +20,9 @@ const SHELL_FILES = [
   "./js/settings.js",
   "./js/push.js",
   "./js/onboarding.js",
+  "./js/places.js",
+  "./js/travel.js",
+  "./js/map.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png"
