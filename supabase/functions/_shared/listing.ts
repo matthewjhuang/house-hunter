@@ -647,6 +647,15 @@ function fromEmbedded(p: Parsed, html: string) {
         break;
       }
     }
+    // REA lists agents as "listers", often without a phone number.
+    for (const o of w.objects) {
+      const lister = Array.isArray(o.listers) ? o.listers[0] as Record<string, unknown> : null;
+      if (!lister) continue;
+      setIfEmpty(p, "agent_name", str(valueOf(lister.name)));
+      setIfEmpty(p, "agent_phone", str(valueOf(lister.phoneNumber ?? lister.mobilePhoneNumber ?? lister.phone)));
+      setIfEmpty(p, "agent_email", decodeEmail(lister.email ?? lister.emailAddress));
+      break;
+    }
     setIfEmpty(p, "agency", first(w, ["agencyName", "brandName"], str) as string | null);
 
     // Inspections: objects with an opening/start time.
@@ -721,6 +730,10 @@ export function parseListing(html: string): Parsed {
 }
 
 function tidy(p: Parsed): Parsed {
+  // REA's addresses can carry double spaces ("10/72 Cobden  Street").
+  for (const k of ["title", "address", "suburb", "agent_name", "agency", "property_type"] as const) {
+    if (p[k]) p[k] = (p[k] as string).replace(/\s+/g, " ").trim();
+  }
   // Upcoming inspections only, de-duplicated, soonest first.
   const now = Date.now() - 60 * 60 * 1000;
   const seen = new Set<string>();
@@ -981,7 +994,8 @@ export async function importListing(
     const update: Record<string, unknown> = {};
     // Fill only what's empty, so nothing either of you edited by hand is overwritten.
     for (const f of COPY_FIELDS) {
-      if ((existing[f] === null || existing[f] === "") && parsed[f] !== null) update[f] = parsed[f];
+      const placeholder = f === "title" && /^Listing on /.test(String(existing.title ?? ""));
+      if ((existing[f] === null || existing[f] === "" || placeholder) && parsed[f] !== null) update[f] = parsed[f];
     }
     if (!existing.address_key && key) update.address_key = key;
     if (((existing.photo_urls as string[]) ?? []).length === 0 && parsed.photo_urls.length) update.photo_urls = parsed.photo_urls;
