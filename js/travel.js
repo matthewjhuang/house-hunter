@@ -25,13 +25,14 @@ function stopRow(s) {
   </div>`;
 }
 
-function timeHtml(row, mode, placeReady) {
+// The place's usual mode comes first and in full colour; the other sits under it, dimmed.
+function timeHtml(row, mode, placeReady, primary) {
   const secs = travelSeconds(row);
   const glyph = icon(mode === "transit" ? "train" : "car");
   const label = `<span class="visually-hidden">${MODE_LABEL[mode]}: </span>`;
   if (secs != null) {
     const approx = mode === "drive" && row.manual_s == null ? "~" : "";
-    return `<span class="${mode === "drive" ? "secondary" : ""}">${glyph}${label}${approx}${minutes(secs)}${row.manual_s != null ? ` <span class="tag">Yours</span>` : ""}</span>`;
+    return `<span class="${primary ? "" : "secondary"}">${glyph}${label}${approx}${minutes(secs)}${row.manual_s != null ? ` <span class="tag">Yours</span>` : ""}</span>`;
   }
   if (!placeReady) return "";
   if (!row) return `<span class="secondary">${glyph}${label}<span class="spinner small" aria-hidden="true"></span><span class="visually-hidden">Working it out</span></span>`;
@@ -52,11 +53,12 @@ function placeRow(p, { place, transit, drive }) {
   const placeReady = place.latitude != null && place.geocode_status !== "not_found";
   const sub = !placeReady
     ? place.geocode_status === "not_found" ? "Couldn't find this place's address" : "Finding the place on the map…"
-    : transit?.summary ?? place.address;
+    : place.travel_mode === "drive" ? place.address : transit?.summary ?? place.address;
+  const order = place.travel_mode === "drive" ? [["drive", drive], ["transit", transit]] : [["transit", transit], ["drive", drive]];
   return `<button class="row travel-row" data-travel="${place.id}">
     <span class="row-label">${esc(place.name)} <span class="secondary">· ${esc(ownerLabel(place.owner_id).replace("Both of you", "Both"))}</span>
       <span class="t-footnote secondary">${esc(sub)}</span></span>
-    <span class="travel-times">${timeHtml(transit, "transit", placeReady)}${timeHtml(drive, "drive", placeReady)}</span>
+    <span class="travel-times">${order.map(([mode, row], i) => timeHtml(row, mode, placeReady, i === 0)).join("")}</span>
   </button>`;
 }
 
@@ -115,10 +117,15 @@ export function onTravelClick(t, p, body) {
     setTimeout(() => { const input = body.querySelector("#manual-time"); input?.focus(); input?.select(); }, 30);
   };
   const items = [
-    { label: "Directions in Google Maps", icon: "map", onClick: () => window.open(directionsUrl(p, place, "transit"), "_blank", "noopener") }
+    { label: "Directions in Google Maps", icon: "map", onClick: () => window.open(directionsUrl(p, place, place.travel_mode), "_blank", "noopener") }
   ];
-  if (transit) items.push({ label: "Set Public Transport Time", icon: "pencil", separatorBefore: true, onClick: edit("transit") });
-  if (drive) items.push({ label: "Set Driving Time", icon: "pencil", onClick: edit("drive") });
+  const sets = [
+    transit && { label: "Set Public Transport Time", icon: "pencil", onClick: edit("transit") },
+    drive && { label: "Set Driving Time", icon: "pencil", onClick: edit("drive") }
+  ].filter(Boolean);
+  if (place.travel_mode === "drive") sets.reverse();
+  if (sets.length) sets[0].separatorBefore = true;
+  items.push(...sets);
   const mine = [transit, drive].filter((r) => r?.manual_s != null);
   if (mine.length) {
     items.push({ label: "Use Calculated Times", icon: "restore", onClick: () => Promise.all(mine.map((r) => upsertRow("travel_times", { id: r.id, manual_s: null }))).catch(showError) });
@@ -157,25 +164,28 @@ async function recalculate(p, button) {
 
 // ---------------------------------------------------------------- board cards
 
-// Public transport to the places marked Show on Cards, labelled by whose they are
-// ("Matthew 32 min · Hannah 58 min"), plus the walk to the nearest stop.
+// Times to the places marked Show on Cards, each the way that place is usually reached
+// and labelled by whose it is ("Matthew ~18 min" by car, "Hannah 58 min" by train),
+// plus the walk to the nearest stop.
 export function cardTravel(p) {
   if (p.stage === "rejected" || !located(p)) return { html: "", label: "" };
   const chosen = travelFor(p.id).filter((x) => x.place.show_on_cards).slice(0, 3);
   const ownerCount = (id) => chosen.filter((x) => x.place.owner_id === id).length;
-  const parts = chosen.map(({ place, transit }) => {
-    const secs = travelSeconds(transit);
+  const parts = chosen.map(({ place, transit, drive }) => {
+    const byCar = place.travel_mode === "drive";
+    const row = byCar ? drive : transit;
+    const secs = travelSeconds(row);
     if (secs == null) return null;
     const who = place.owner_id && ownerCount(place.owner_id) === 1 ? ownerLabel(place.owner_id) : place.name;
-    return { who, time: minutes(secs) };
+    return { who, byCar, time: `${byCar && row.manual_s == null ? "~" : ""}${minutes(secs)}` };
   }).filter(Boolean);
   const stop = [...(p.nearest_stops ?? [])].sort((a, b) => a.walk_s - b.walk_s)[0];
   const html = [
-    parts.length ? `<span class="card-travel">${icon("train")}${parts.map((x) => `${esc(x.who)} ${esc(x.time)}`).join(" · ")}</span>` : "",
+    ...parts.map((x) => `<span class="card-travel">${icon(x.byCar ? "car" : "train")}${esc(x.who)} ${esc(x.time)}</span>`),
     stop ? `<span>${icon("walk")}${minutes(stop.walk_s)} to ${esc(stopName(stop))}</span>` : ""
   ].filter(Boolean).join("");
   const label = [
-    parts.length ? `By public transport: ${parts.map((x) => `${x.who} ${x.time}`).join(", ")}` : "",
+    ...parts.map((x) => `${x.who} ${x.time.replace("~", "about ")} by ${x.byCar ? "car" : "public transport"}`),
     stop ? `${minutes(stop.walk_s)} walk to ${stopName(stop)}` : ""
   ].filter(Boolean).join(", ");
   return { html, label };

@@ -3,7 +3,7 @@
 // Addresses are looked up on the server by travel-times, so a new place shows
 // "Finding it on the map…" for a few seconds, then updates live.
 import { esc, icon, placeKind, PLACE_KINDS } from "./format.js";
-import { store, subscribe, touch, placesSorted, upsertRow, deleteRow } from "./store.js";
+import { store, subscribe, touch, placesSorted, upsertRow, deleteRow, usualMode } from "./store.js";
 import { navBar, collapsingTitle, openSheet, openMenu, onLongPress, enableSwipeRows, swipeRow, toast, showError, confirmDestructive } from "./ui.js";
 
 let root, listEl;
@@ -47,7 +47,8 @@ function statusLine(q) {
   if (q.geocode_status === "not_found") return `<span class="place-status warn">${icon("warn")}Address not found. Tap to fix it.</span>`;
   if (q.geocode_status === "approximate") return `<span class="place-status warn">${icon("warn")}Only roughly found. Check the address.</span>`;
   if (q.latitude == null) return `<span class="place-status"><span class="spinner small" aria-hidden="true"></span>Finding it on the map…</span>`;
-  return `<span class="t-footnote secondary">${esc(q.address)}</span>`;
+  const mode = q.travel_mode === "drive" ? "car" : "train";
+  return `<span class="t-footnote secondary">${icon(mode)}<span class="visually-hidden">${q.travel_mode === "drive" ? "By car" : "By public transport"}, </span>${esc(q.address)}</span>`;
 }
 
 function rowHtml(q) {
@@ -117,6 +118,8 @@ export function openPlace(id = null) {
   let owner = q ? q.owner_id ?? "" : store.user?.id ?? "";
   let onCards = q?.show_on_cards ?? true;
   let onCardsTouched = !isNew;
+  let mode = q?.travel_mode ?? usualMode(owner || null);
+  let modeTouched = !isNew;
   let sheetRef = null;
 
   const owners = [...store.members.map((m) => ({ id: m.user_id, label: m.display_name })), { id: "", label: "Both" }];
@@ -149,11 +152,18 @@ export function openPlace(id = null) {
             </div>
           </div>
 
+          <div class="group-header" id="mode-label">Usually by</div>
+          <div style="padding:0 var(--gutter)">
+            <div class="segmented wide" role="radiogroup" aria-labelledby="mode-label">
+              ${[["drive", "Car"], ["transit", "Public Transport"]].map(([m, label]) => `<button type="button" role="radio" data-mode="${m}" aria-checked="${m === mode}">${esc(label)}</button>`).join("")}
+            </div>
+          </div>
+
           <div class="group" style="margin-top:24px">
             <label class="row" for="p-cards"><span class="row-label">Show on Cards</span>
               <input type="checkbox" role="switch" class="switch" id="p-cards" ${onCards ? "checked" : ""} /></label>
           </div>
-          <p class="group-footer">Board cards show the public transport time to this place.</p>
+          <p class="group-footer">Board cards show the time to this place the way you usually get there. Listings show both.</p>
           <div class="field-error" id="place-error" role="alert"></div>
           ${isNew ? "" : `<div class="group" style="margin-top:32px"><button type="button" class="row btn-destructive" id="p-delete" style="justify-content:center">${icon("trash")}Delete Place</button></div>`}
         </form>`;
@@ -170,7 +180,13 @@ export function openPlace(id = null) {
       body.querySelectorAll("[data-owner]").forEach((b) => b.addEventListener("click", () => {
         owner = b.dataset.owner;
         body.querySelectorAll("[data-owner]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+        if (!modeTouched) setMode(usualMode(owner || null));
       }));
+      const setMode = (m) => {
+        mode = m;
+        body.querySelectorAll("[data-mode]").forEach((x) => x.setAttribute("aria-checked", String(x.dataset.mode === m)));
+      };
+      body.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { modeTouched = true; setMode(b.dataset.mode); }));
       body.querySelector("#p-cards").addEventListener("change", (e) => { onCards = e.target.checked; onCardsTouched = true; });
       body.querySelector("#p-delete")?.addEventListener("click", async () => {
         await sheet.close({ silent: true });
@@ -191,7 +207,7 @@ export function openPlace(id = null) {
       body.querySelector("#p-address").focus();
       return;
     }
-    const row = { name, kind, address, owner_id: owner || null, show_on_cards: onCards };
+    const row = { name, kind, address, owner_id: owner || null, show_on_cards: onCards, travel_mode: mode };
     sheetRef.setRightDisabled(true);
     try {
       const saved = await upsertRow("places", isNew ? row : { id, ...row });

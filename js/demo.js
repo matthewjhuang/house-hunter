@@ -43,12 +43,12 @@ export function demoData() {
     { id: "x2", household_id: "h1", property_id: "p5", kind: "status", old_value: "Available", new_value: "Under application", detected_at: day(0, 6) }
   ];
   const placeRows = [
-    { id: "q1", household_id: "h1", owner_id: me, name: "Work", kind: "work", address: "101 Collins St, Melbourne", show_on_cards: true, latitude: -37.81489, longitude: 144.97064, geocode_status: "ok", position: 1 },
-    { id: "q2", household_id: "h1", owner_id: me, name: "Gym", kind: "gym", address: "Fitness First, 380 Sydney Rd, Brunswick", show_on_cards: false, latitude: -37.76881, longitude: 144.96126, geocode_status: "ok", position: 2 },
-    { id: "q3", household_id: "h1", owner_id: partner, name: "Work", kind: "work", address: "Box Hill Hospital", show_on_cards: true, latitude: -37.81361, longitude: 145.11841, geocode_status: "ok", position: 3 },
-    { id: "q4", household_id: "h1", owner_id: partner, name: "Uni", kind: "study", address: "Main campus", show_on_cards: false, latitude: null, longitude: null, geocode_status: "not_found", position: 4 },
-    { id: "q5", household_id: "h1", owner_id: null, name: "Groceries", kind: "shops", address: "Coles, Barkly Square, Brunswick", show_on_cards: false, latitude: -37.77275, longitude: 144.96063, geocode_status: "ok", position: 5 },
-    { id: "q6", household_id: "h1", owner_id: null, name: "Mum and Dad", kind: "family", address: "Ivanhoe", show_on_cards: false, latitude: -37.76889, longitude: 145.04500, geocode_status: "approximate", position: 6 }
+    { id: "q1", household_id: "h1", owner_id: me, name: "Work", kind: "work", address: "101 Collins St, Melbourne", travel_mode: "drive", show_on_cards: true, latitude: -37.81489, longitude: 144.97064, geocode_status: "ok", position: 1 },
+    { id: "q2", household_id: "h1", owner_id: me, name: "Gym", kind: "gym", address: "Fitness First, 380 Sydney Rd, Brunswick", travel_mode: "drive", show_on_cards: false, latitude: -37.76881, longitude: 144.96126, geocode_status: "ok", position: 2 },
+    { id: "q3", household_id: "h1", owner_id: partner, name: "Work", kind: "work", address: "Box Hill Hospital", travel_mode: "transit", show_on_cards: true, latitude: -37.81361, longitude: 145.11841, geocode_status: "ok", position: 3 },
+    { id: "q4", household_id: "h1", owner_id: partner, name: "Uni", kind: "study", address: "Main campus", travel_mode: "transit", show_on_cards: false, latitude: null, longitude: null, geocode_status: "not_found", position: 4 },
+    { id: "q5", household_id: "h1", owner_id: null, name: "Groceries", kind: "shops", address: "Coles, Barkly Square, Brunswick", travel_mode: "transit", show_on_cards: false, latitude: -37.77275, longitude: 144.96063, geocode_status: "ok", position: 5 },
+    { id: "q6", household_id: "h1", owner_id: null, name: "Mum and Dad", kind: "family", address: "Ivanhoe", travel_mode: "transit", show_on_cards: false, latitude: -37.76889, longitude: 145.04500, geocode_status: "approximate", position: 6 }
   ];
   // Rough times from straight-line distance, so the numbers look plausible.
   const km = (a, b) => Math.hypot((a.latitude - b.latitude) * 111, (a.longitude - b.longitude) * 88);
@@ -76,8 +76,8 @@ export function demoData() {
     user: { id: me, email: "matthewjhuang@gmail.com" },
     household,
     members: [
-      { household_id: "h1", user_id: me, display_name: "Matthew", email: "matthewjhuang@gmail.com", reminder_lead_minutes: 60 },
-      { household_id: "h1", user_id: partner, display_name: "Hannah", email: "hannahhuange@gmail.com", reminder_lead_minutes: 60 }
+      { household_id: "h1", user_id: me, display_name: "Matthew", email: "matthewjhuang@gmail.com", reminder_lead_minutes: 60, travel_mode: "drive" },
+      { household_id: "h1", user_id: partner, display_name: "Hannah", email: "hannahhuange@gmail.com", reminder_lead_minutes: 60, travel_mode: "transit" }
     ],
     invites: [],
     properties: map(props),

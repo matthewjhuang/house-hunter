@@ -186,6 +186,12 @@ export function placesSorted() {
     owners.indexOf(a.owner_id ?? null) - owners.indexOf(b.owner_id ?? null) || a.position - b.position);
 }
 
+// How someone usually gets around: their own setting, or public transport for places
+// you share.
+export function usualMode(userId) {
+  return state.members.find((m) => m.user_id === userId)?.travel_mode ?? "transit";
+}
+
 // { place, transit, drive } for every place, transit/drive being travel_times rows.
 export function travelFor(propertyId) {
   const rows = [...state.travel.values()].filter((t) => t.property_id === propertyId);

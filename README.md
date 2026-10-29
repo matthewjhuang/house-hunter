@@ -230,13 +230,19 @@ Share menu lists House Hunter once it's installed (`share_target` in the manifes
 ## Places, travel times and the map
 
 - **Places tab.** Each of you adds the places you go every week (work, study, the gym,
-  family), each one yours, Hannah's or both of yours. Turn on **Show on Cards** for the one
-  or two that matter most.
+  family), each one yours, Hannah's or both of yours, and set how you usually get there:
+  car or public transport. New places start with their owner's way (Matthew drives, Hannah
+  takes public transport, shared places use public transport). Turn on **Show on Cards** for
+  the one or two that matter most.
 - **Getting around** on every listing that isn't Rejected: the nearest train station and tram
   stop with the walk to each, then public transport and car times to every place, for a
   weekday trip arriving 8:30am. Tap a place to get directions in Google Maps or type in your
-  own time (yours always wins and is never overwritten). Cards show the public transport
-  time to the Show on Cards places and the walk to the nearest stop.
+  own time (yours always wins and is never overwritten). Each place's usual way is listed
+  first. Cards show the time to the Show on Cards places the usual way (e.g. "Matthew
+  ~18 min" by car, "Hannah 57 min" by train) and the walk to the nearest stop.
+  To change someone's default for new places:
+  `update household_members set travel_mode = 'transit' where display_name = 'Matthew';`
+  (and the same on `household_invites` for anyone who hasn't signed up yet).
 - **Map tab.** Every listing that isn't Rejected as a price pin in its stage colour, and
   your places as square markers. Filter by stage, tap a pin for a preview, tap the preview to
   open the listing.

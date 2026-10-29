@@ -116,3 +116,11 @@ use the stage colours with dark text in dark mode, where those colours are brigh
 light and dark: Places list/add/edit states, Getting around, typing your own time (and that
 the card follows), map pins, filters, preview, opening and closing a listing from the map.
 Cache v10.
+
+## Stage 2.1 — Usual way to travel (30 Oct 2026)
+
+Matthew drives and Hannah takes public transport, so each person has a `travel_mode`
+(on `household_members`, and on `household_invites` so Hannah's carries over when she signs
+up), and each place has its own, starting from its owner's. Cards show each place's time the
+usual way, with a car or train glyph; the sheet lists the usual way first and dims the other.
+Both modes are still computed. Existing places owned by Matthew were switched to car.
