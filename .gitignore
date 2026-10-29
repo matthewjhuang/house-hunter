@@ -1,0 +1,5 @@
+.logs/
+.DS_Store
+# Locally generated secrets (VAPID keys etc.) — paste into Supabase, never commit.
+*.local
+.claude/settings.local.json
