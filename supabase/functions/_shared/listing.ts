@@ -919,7 +919,10 @@ export async function importListing(
   let fetched: FetchResult = fromApi
     ? { status: "ok", httpStatus: 200, html: "", finalUrl: source.url }
     : await fetchListing(source.url);
-  if (fetched.status !== "ok" && providedHtml && providedHtml.length > 2000 && !BLOCK_MARKERS.slice(0, 2).some((m) => m.test(providedHtml.slice(0, 5000)))) {
+  // Real Domain/REA pages load the bot-check script too, so a page only counts as a
+  // bot check when it also lacks the listing data.
+  const looksLikeListing = (html: string) => /application\/ld\+json|__NEXT_DATA__|ArgonautExchange|og:title/.test(html);
+  if (fetched.status !== "ok" && providedHtml && providedHtml.length > 2000 && looksLikeListing(providedHtml)) {
     fetched = { status: "ok", httpStatus: 200, html: providedHtml.slice(0, 3_000_000), finalUrl: source.url };
   }
   const parsed = fromApi ?? (fetched.status === "ok" ? parseListing(fetched.html) : emptyParsed());
