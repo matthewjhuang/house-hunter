@@ -157,8 +157,8 @@ const RENDER = {
     const missing = (p.missing_fields ?? []).filter((f) => FIELD_LABELS[f]);
     if ((p.parse_status === "blocked" || p.parse_status === "partial") && missing.length) {
       const site = siteName(p.sources?.[0]?.site ?? "the site");
-      out.push(`<div class="notice">${icon("warn")}<div><strong>${p.parse_status === "blocked" ? `${esc(site)} didn't let us read this listing` : "Some details are missing"}</strong>
-        Missing: ${missing.map((f) => esc(FIELD_LABELS[f])).join(", ")}.
+      out.push(`<div class="notice">${icon("warn")}<div><strong>${p.parse_status === "blocked" ? `${esc(site)} wouldn't share the details` : "Some details are missing"}</strong>
+        Open the listing in Safari and tap Share → <strong>Add to House Hunter</strong> to fill them in.
         <div style="display:flex;gap:16px"><button class="btn btn-plain bold" style="padding:0;min-height:40px" data-act="retry">Try Again</button><button class="btn btn-plain" style="padding:0;min-height:40px" data-act="edit">Fill In by Hand</button></div></div></div>`);
     }
     const changes = changesFor(p.id);

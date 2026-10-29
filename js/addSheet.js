@@ -6,7 +6,7 @@ import { esc, icon } from "./format.js";
 import { supabase } from "./supabaseClient.js";
 import { store } from "./store.js";
 import { openSheet, toast, showError } from "./ui.js";
-import { openEdit, blockedNotice } from "./editSheet.js";
+import { openEdit } from "./editSheet.js";
 
 const looksLikeUrl = (s) => /^https?:\/\/\S+\.\S+/i.test(s.trim());
 
@@ -29,7 +29,7 @@ export function openAdd(prefill = "", { autoStart = false } = {}) {
           ${navigator.clipboard?.readText ? `<button type="button" class="btn btn-tinted" id="paste-btn">Paste</button>` : ""}
         </form>
         <div id="add-status" role="status" aria-live="polite"></div>
-        <p class="group-footer">Works with realestate.com.au, Domain and most other listing sites. If a site won't share the details, you'll get a card with the link to fill in.</p>
+        <p class="group-footer">REA and Domain usually block reading links, so this saves the card with its address. To get every detail, open the listing in Safari and tap Share → Add to House Hunter.</p>
         <div class="group" style="margin-top:20px">
           <button class="row" id="manual-btn">${icon("pencil")}<span class="row-label">Enter Details by Hand</span>${icon("chevron", "icon chevron")}</button>
         </div>
@@ -77,15 +77,10 @@ export function openAdd(prefill = "", { autoStart = false } = {}) {
       }
       // Wait for the card to arrive (Realtime is usually quicker than this reply).
       await waitForProperty(data.property_id);
-      if (data.merged) {
-        toast(data.summary);
-        (await import("./propertySheet.js")).openProperty(data.property_id);
-      } else if (data.parse_status === "ok") {
-        toast("Added to Saved");
-        (await import("./propertySheet.js")).openProperty(data.property_id);
-      } else {
-        openEdit(data.property_id, { highlightMissing: true, notice: blockedNotice(data, url) });
-      }
+      // Blocked sites still get a card (with the address, when the link has it); the
+      // card itself explains how to fill in the rest.
+      toast(data.parse_status === "blocked" ? "Saved — share it from Safari to fill in the details" : data.merged ? "Filled in the existing card" : "Added to Saved");
+      (await import("./propertySheet.js")).openProperty(data.property_id);
     } catch (err) {
       busy = false;
       input.disabled = false;

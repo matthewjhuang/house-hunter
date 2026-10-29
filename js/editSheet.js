@@ -1,6 +1,6 @@
 // Edit sheet: every field on a card, editable, with whatever the import couldn't
 // read marked "Missing". Also used for adding a listing by hand (no id).
-import { esc, icon, addressKey, missingFields, siteName } from "./format.js";
+import { esc, icon, addressKey, missingFields } from "./format.js";
 import { store, updateProperty, insertProperty } from "./store.js";
 import { openSheet, showError, alertDialog, toast } from "./ui.js";
 
@@ -161,13 +161,4 @@ export function openEdit(id, { highlightMissing = false, notice = null } = {}) {
 
 function lines(text) {
   return String(text ?? "").split(/\s*\n\s*/).map((s) => s.trim()).filter(Boolean);
-}
-
-export function blockedNotice(result, url) {
-  let site = "The site";
-  try { site = siteName(new URL(url).hostname.replace(/^www\./, "")); } catch { /* generic */ }
-  if (result.parse_status === "blocked") {
-    return { title: `${site} didn't let us read this listing`, text: "The card has the link. Fill in what you can see on the listing — anything left blank stays marked as missing." };
-  }
-  return { title: "We got most of it", text: "A few details weren't on the page. Fill them in now or later." };
 }

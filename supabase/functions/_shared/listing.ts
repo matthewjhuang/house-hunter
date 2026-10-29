@@ -296,6 +296,33 @@ export function addressKey(street: string | null, suburb: string | null): string
   return `${s} ${sub}`.trim();
 }
 
+// What the link itself says, for when the page can't be read. Domain URLs spell out
+// the address ("/4-17-clyde-street-kew-east-vic-3102-18170890"); REA URLs give the
+// property type and suburb ("/property-unit-vic-brunswick-148822104").
+export function fromUrl(source: Source): Partial<Parsed> {
+  const path = new URL(source.url).pathname.replace(/\/$/, "");
+  const slug = path.split("/").pop() ?? "";
+  if (source.site === "domain.com.au") {
+    const m = slug.match(new RegExp(`^(.*)-(${STATES})-(\\d{4})-\\d{6,}$`, "i"));
+    if (!m) return {};
+    const words = m[1].split("-");
+    let streetEnd = -1;
+    words.forEach((w, i) => { if (STREET_TYPES[w] || Object.values(STREET_TYPES).includes(w)) streetEnd = i; });
+    if (streetEnd < 1) return { state: m[2].toUpperCase(), postcode: m[3] };
+    const street = words.slice(0, streetEnd + 1);
+    const number = street[1] && /^\d+[a-z]?$/.test(street[0]) && /^\d+[a-z]?$/.test(street[1]) ? `${street.shift()}/${street.shift()}` : null;
+    const address = titleCase([number, ...street].filter(Boolean).join(" "));
+    const suburb = titleCase(words.slice(streetEnd + 1).join(" "));
+    return suburb ? { address, suburb, state: m[2].toUpperCase(), postcode: m[3] } : {};
+  }
+  if (source.site === "realestate.com.au") {
+    const m = slug.match(new RegExp(`^property-([a-z]+)-(${STATES})-(.+)-\\d{6,}$`, "i"));
+    if (!m) return {};
+    return { property_type: titleCase(m[1]), state: m[2].toUpperCase(), suburb: titleCase(m[3].replace(/-/g, " ")) };
+  }
+  return {};
+}
+
 function setIfEmpty<K extends keyof Parsed>(p: Parsed, key: K, value: Parsed[K] | null | undefined) {
   if (value === null || value === undefined || value === "") return;
   if (Array.isArray(p[key])) {
@@ -896,8 +923,11 @@ export async function importListing(
     fetched = { status: "ok", httpStatus: 200, html: providedHtml.slice(0, 3_000_000), finalUrl: source.url };
   }
   const parsed = fromApi ?? (fetched.status === "ok" ? parseListing(fetched.html) : emptyParsed());
-  const key = addressKey(parsed.address, parsed.suburb);
   const gotAnything = !!(parsed.address || parsed.rent_pw || parsed.beds);
+  // Blocked: at least take the address from the link, so a later share of the same
+  // listing from Safari lands on this card.
+  for (const [k, v] of Object.entries(fromUrl(source))) setIfEmpty(parsed, k as keyof Parsed, v as never);
+  const key = addressKey(parsed.address, parsed.suburb);
   const parseStatus: ImportResult["parse_status"] =
     fetched.status !== "ok" || !gotAnything ? "blocked" : coreMissing(parsed) ? "partial" : "ok";
   const message = fetched.status === "ok"
@@ -971,7 +1001,11 @@ export async function importListing(
 
   const { data: card } = await admin.from("properties").select("address, suburb, title, missing_fields, parse_status").eq("id", propertyId).single();
   const where = card?.address ? `${card.address}${card.suburb ? ", " + card.suburb : ""}` : (card?.title ?? source.site);
-  const summary = merged ? `Added the ${source.site} link to ${where}` : parseStatus === "blocked" ? `Saved the link from ${source.site}: add the details in House Hunter` : `Added ${where}`;
+  const cardStatus = card?.parse_status ?? parseStatus;
+  const summary = cardStatus === "blocked"
+    ? `Saved ${where}. ${siteLabel(source.site)} wouldn't share the details — open the listing in Safari and share it again to fill them in.`
+    : parseStatus === "blocked" ? `${where} is already on your board`
+    : merged ? `Filled in ${where}` : `Added ${where}`;
   return {
     property_id: propertyId,
     merged,
@@ -980,6 +1014,10 @@ export async function importListing(
     message,
     summary
   };
+}
+
+function siteLabel(site: string) {
+  return site === "domain.com.au" ? "Domain" : site === "realestate.com.au" ? "realestate.com.au" : site;
 }
 
 export async function sha256Hex(text: string) {

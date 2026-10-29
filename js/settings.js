@@ -176,24 +176,15 @@ export function openShortcutHelp(token) {
         <div class="group-header">Endpoint</div>
         <div class="group"><div class="token-box" id="endpoint">${esc(endpoint)}</div>
           <button class="row" data-copy="endpoint" style="color:var(--tint)">Copy Endpoint</button></div>
-        <div class="group-header">Add it to your iPhone (1 minute)</div>
+        <div class="group-header">Set up once (1 minute)</div>
         <div class="group"><ol class="onboard-steps">
           <li><span class="step-num">1</span><span>${token ? "Copy the token above." : "Create your token in Settings and copy it."}</span></li>
-          <li><span class="step-num">2</span><span>On your iPhone, tap <a href="./add-to-house-hunter.shortcut" download="Add to House Hunter.shortcut"><strong>Get the Shortcut</strong></a> → <strong>Download</strong>, then open it from Safari's Downloads (the arrow at the bottom) and tap <strong>Add Shortcut</strong>.</span></li>
-          <li><span class="step-num">3</span><span>When it asks, paste your token. Done.</span></li>
+          <li><span class="step-num">2</span><span>On your iPhone, tap <a href="./add-to-house-hunter.shortcut" download="Add to House Hunter.shortcut"><strong>Get the Shortcut</strong></a> → Download, open it from Safari's Downloads, tap <strong>Add Shortcut</strong> and paste your token.</span></li>
+          <li><span class="step-num">3</span><span>iPhone <strong>Settings → Apps → Shortcuts → Advanced</strong> → turn on <strong>Allow Running Scripts</strong>. This lets the Shortcut read the listing you're looking at.</span></li>
         </ol></div>
-        <p class="group-footer">If the Shortcut ever stops working, make a new token here and re-add it.</p>
-        <details class="group" style="margin-top:12px"><summary class="row" style="color:var(--tint)">Build it by hand instead</summary><ol class="onboard-steps">
-          <li><span class="step-num">1</span><span>Open <strong>Shortcuts</strong>, tap <strong>+</strong>, and name it <strong>Add to House Hunter</strong>.</span></li>
-          <li><span class="step-num">2</span><span>Tap the name at the top → <strong>Details</strong>, turn on <strong>Show in Share Sheet</strong>, and set it to receive <strong>URLs</strong> and <strong>Text</strong>.</span></li>
-          <li><span class="step-num">3</span><span>Add <strong>Get URLs from Input</strong>, then <strong>Get Item from List</strong> (First Item).</span></li>
-          <li><span class="step-num">4</span><span>Add <strong>Get Contents of URL</strong> with that item, method GET. This reads the listing on your phone.</span></li>
-          <li><span class="step-num">5</span><span>Add another <strong>Get Contents of URL</strong>: URL the endpoint above, method <strong>POST</strong>, header <strong>Authorization</strong> = <code>Bearer</code> + space + your token, Request Body <strong>JSON</strong> with <code>url</code> = the item from step 3 and <code>html</code> = the Contents of URL from step 4.</span></li>
-          <li><span class="step-num">6</span><span>Add <strong>Show Notification</strong> with the Contents of URL from step 5.</span></li>
-        </ol></details>
         <div class="group-header">Using it</div>
-        <div class="group"><div class="row"><span class="row-label">In the REA or Domain app, open a listing, tap <strong>Share</strong> ${icon("share", "share-glyph")}, then <strong>Add to House Hunter</strong>. The card shows up on both your boards in a few seconds.</span></div></div>
-        <p class="group-footer">The same steps are in the project README.</p>`;
+        <div class="group"><div class="row"><span class="row-label">Open the listing in <strong>Safari</strong>, tap <strong>Share</strong> ${icon("share", "share-glyph")}, then <strong>Add to House Hunter</strong>. The card appears on both boards with every detail.</span></div></div>
+        <p class="group-footer">Sharing from the REA or Domain apps also works, but those sites block reading the link, so you'll only get the address. Share the same listing from Safari later and it fills in that card.</p>`;
       body.addEventListener("click", async (e) => {
         const b = e.target.closest("[data-copy]");
         if (!b) return;
