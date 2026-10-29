@@ -65,3 +65,18 @@ than fight the bot check, Domain links now go through Domain's official API
 agent/agency names as best-effort extra calls. "Needs details" now only shows when address,
 rent or beds are missing (the API has no bond). Blocked cards get a **Try Again** button,
 and the daily re-check re-imports blocked/partial cards so they repair themselves. Cache v3.
+
+## Stage 1.3 — Share from Safari (29 Oct 2026)
+
+Domain's API turned out to need an ABN, so the import path became the Share Sheet
+Shortcut reading the page open in Safari (Run JavaScript; needs Allow Running Scripts).
+Lessons from testing on real listings: real Domain/REA pages load the `kpsdk` bot-check
+script, so it can't mark a page blocked by itself; Domain sometimes answers the server with
+a 200 page that has no listing, so the page the phone shares always wins over our own
+fetch. REA keeps agents under `listers` (no phone) and pads addresses with double spaces.
+Leased listings move to Rejected as Missed out unless you're already approved.
+
+Shares from the REA/Domain apps only carry a link, which no automated request can read,
+so the Shortcut now saves the card and opens the listing in Safari (`x-safari-https://`)
+for one more Share tap; share-listing replies "Opening it in Safari" to trigger that, and
+tells you to turn on Allow Running Scripts if a Safari share arrives empty. Cache v9.

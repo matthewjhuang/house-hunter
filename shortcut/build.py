@@ -11,10 +11,11 @@ What it does when you share a listing:
   4. Get Type of what was shared
   5. If it's a Safari web page: 6. Run JavaScript on it to read the page exactly as
      you're seeing it (the sites can't block this — it's already loaded)
-  7. Otherwise (shared from the REA/Domain apps): 8-10. if there's a link, try
-     reading it from the phone (usually blocked; the card still gets the address)
-  12. POST { url, html } to share-listing with "Bearer <token>"
-  13. Show Notification with the reply ("Filled in 4/17 Clyde Street, Kew East")
+  8. POST { url, html, source } to share-listing with "Bearer <token>"
+  9. Show Notification with the reply ("Filled in 4/17 Clyde Street, Kew East")
+  10. Shared from the REA/Domain apps (only a link, which the sites won't let anyone
+     read): the reply says "Opening it in Safari", so 11-12 open the listing in Safari
+     (x-safari-https:// keeps it out of the apps) for one more Share tap.
 """
 import plistlib
 import uuid
@@ -56,8 +57,8 @@ def dictionary(items):
     }
 
 
-token, shared, matches, first, kind, reply = uid(), uid(), uid(), uid(), uid(), uid()
-outer, inner, outer_end = uid(), uid(), uid()
+token, shared, matches, first, kind, reply, safari_url = uid(), uid(), uid(), uid(), uid(), uid(), uid()
+outer, outer_end, reopen = uid(), uid(), uid()
 
 shared_text = {
     "WFSerializationType": "WFTextTokenString",
@@ -89,13 +90,6 @@ actions = [
     {"WFWorkflowActionIdentifier": "is.workflow.actions.runjavascriptonwebpage",
      "WFWorkflowActionParameters": {"UUID": uid(), "WFInput": attachment(extension_input=True),
                                     "WFJavaScript": "completion(document.documentElement.outerHTML);"}},
-    conditional(outer, 1),
-    # Otherwise: try reading the link from the phone, if there is one.
-    conditional(inner, 0, WFCondition=100,
-                WFInput={"Type": "Variable", "Variable": attachment(first, "Item from List")}),
-    {"WFWorkflowActionIdentifier": "is.workflow.actions.downloadurl",
-     "WFWorkflowActionParameters": {"UUID": uid(), "WFURL": text_with("", first, "Item from List"), "WFHTTPMethod": "GET"}},
-    conditional(inner, 2),
     conditional(outer, 2, uuid=outer_end),
     {"WFWorkflowActionIdentifier": "is.workflow.actions.downloadurl",
      "WFWorkflowActionParameters": {
@@ -108,11 +102,20 @@ actions = [
          "WFJSONValues": dictionary([
              ("url", text_with("", first, "Item from List")),
              ("html", text_with("", outer_end, "If Result")),
+             ("source", text_with("", kind, "Type")),
          ]),
      }},
     {"WFWorkflowActionIdentifier": "is.workflow.actions.notification",
      "WFWorkflowActionParameters": {"WFNotificationActionTitle": text("House Hunter"),
                                     "WFNotificationActionBody": text_with("", reply, "Contents of URL")}},
+    # Shared from an app: open the listing in Safari so one more share fills the card.
+    conditional(reopen, 0, WFCondition=99, WFConditionalActionString="Opening it in Safari",
+                WFInput={"Type": "Variable", "Variable": attachment(reply, "Contents of URL")}),
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.url",
+     "WFWorkflowActionParameters": {"UUID": safari_url, "WFURLActionURL": text_with("x-safari-", first, "Item from List")}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.openurl",
+     "WFWorkflowActionParameters": {"WFInput": attachment(safari_url, "URL")}},
+    conditional(reopen, 2),
 ]
 
 shortcut = {

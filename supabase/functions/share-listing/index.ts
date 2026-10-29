@@ -7,9 +7,11 @@
 // stored), sent as "Authorization: Bearer <token>". Deployed with verify_jwt off.
 //
 // Request:  POST { url } — or { text } with the shared text, the first link in it is used.
-//           Optional { html }: the page as the phone fetched it, parsed if our own
-//           request to the site is refused.
-// Response: text/plain, one line for the Shortcut to show, e.g. "Added 12 Smith St, Brunswick"
+//           Optional { html }: the page open in Safari, read by the Shortcut.
+//           Optional { source }: what was shared ("Safari web page", "URL", "Text").
+// Response: text/plain, one line for the Shortcut to show, e.g. "Added 12 Smith St, Brunswick".
+// When an app share couldn't be read, the reply contains "Opening it in Safari", which
+// tells the Shortcut to open the listing there for one more share.
 import { adminClient, CORS_HEADERS, extractUrl, importListing, sha256Hex } from "../_shared/listing.ts";
 
 function text(message: string, status = 200) {
@@ -29,12 +31,14 @@ Deno.serve(async (req) => {
 
   let raw = "";
   let html: string | null = null;
+  let source = "";
   const contentType = req.headers.get("Content-Type") ?? "";
   try {
     if (contentType.includes("application/json")) {
       const body = await req.json();
       raw = String(body.url ?? body.text ?? "");
       html = typeof body.html === "string" ? body.html : null;
+      source = String(body.source ?? "");
     } else if (contentType.includes("form")) {
       const form = await req.formData();
       raw = String(form.get("url") ?? form.get("text") ?? "");
@@ -62,7 +66,13 @@ Deno.serve(async (req) => {
 
   try {
     const result = await importListing(admin, owner.household_id, owner.user_id, url, html);
-    console.log("share-listing result", result.parse_status, result.message ?? "", "missing:", result.missing_fields.join(","));
+    console.log("share-listing result", source || "no source", result.parse_status, result.message ?? "", "missing:", result.missing_fields.join(","));
+    if (result.parse_status === "blocked" && !html) {
+      // Safari shares always send the page; an empty one means scripts are switched off.
+      return text(/safari/i.test(source)
+        ? `Saved ${result.label}, but the Shortcut couldn't read the page. Turn on Settings → Apps → Shortcuts → Advanced → Allow Running Scripts, then share it again.`
+        : `Saved ${result.label}. Opening it in Safari — tap Share → Add to House Hunter there to fill in the details.`);
+    }
     return text(result.summary);
   } catch (err) {
     console.error("share-listing failed", url, err);

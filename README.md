@@ -186,9 +186,12 @@ neither offers a usable public API (Domain's is business-only), so:
 - **Share from Safari (everything filled in).** Open the listing in Safari → Share →
   **Add to House Hunter**. The Shortcut reads the page you're looking at, which the sites
   can't block, and the card appears on both boards with rent, photos, agent and inspections.
-- **Paste a link in the app, or share from the REA/Domain apps (address only).** You get
-  a card straight away with what the link itself says (the full address for Domain links).
-  Share the same listing from Safari later and it fills in that card.
+- **Share from the REA/Domain apps (two taps).** The apps only share a link, so the card
+  starts with what the link says (the full address for Domain, type and suburb for REA),
+  then the Shortcut opens the listing in Safari (`x-safari-https://`, so it doesn't bounce
+  back to the app). Tap Share → **Add to House Hunter** there and the same card fills in.
+- **Paste a link in the app (address only).** Same starting card; share the listing from
+  Safari later to fill it in.
 
 ### One-time setup on each iPhone
 

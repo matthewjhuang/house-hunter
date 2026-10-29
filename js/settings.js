@@ -76,7 +76,7 @@ function render() {
            <button class="row btn-destructive" data-act="token-revoke"><span class="row-label">Revoke Token</span></button>`
         : `<button class="row" data-act="token-new"><span class="row-label" style="color:var(--tint)">Create Your Shortcut Token</span></button>`}
     </div>
-    <p class="group-footer">The Shortcut adds a listing straight from the Share button in the realestate.com.au and Domain apps. Your token works only for adding listings.</p>
+    <p class="group-footer">The Shortcut adds a listing from the Share button in Safari or the realestate.com.au and Domain apps. Your token works only for adding listings.</p>
 
     <div class="group-header">Household</div>
     <div class="group">
@@ -184,7 +184,7 @@ export function openShortcutHelp(token) {
         </ol></div>
         <div class="group-header">Using it</div>
         <div class="group"><div class="row"><span class="row-label">Open the listing in <strong>Safari</strong>, tap <strong>Share</strong> ${icon("share", "share-glyph")}, then <strong>Add to House Hunter</strong>. The card appears on both boards with every detail.</span></div></div>
-        <p class="group-footer">Sharing from the REA or Domain apps also works, but those sites block reading the link, so you'll only get the address. Share the same listing from Safari later and it fills in that card.</p>`;
+        <p class="group-footer">From the REA or Domain apps, the Shortcut saves the card, then opens the listing in Safari. Tap Share → Add to House Hunter once more there to fill in every detail. (The apps only share a link, which those sites won't let anyone read.)</p>`;
       body.addEventListener("click", async (e) => {
         const b = e.target.closest("[data-copy]");
         if (!b) return;

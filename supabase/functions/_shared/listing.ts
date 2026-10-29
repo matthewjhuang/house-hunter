@@ -904,6 +904,8 @@ export interface ImportResult {
   parse_status: "ok" | "partial" | "blocked";
   missing_fields: string[];
   message: string | null;
+  // How the card is named in messages: its address, or what the link says.
+  label: string;
   summary: string;
 }
 
@@ -994,7 +996,7 @@ export async function importListing(
     const update: Record<string, unknown> = {};
     // Fill only what's empty, so nothing either of you edited by hand is overwritten.
     for (const f of COPY_FIELDS) {
-      const placeholder = f === "title" && /^Listing on /.test(String(existing.title ?? ""));
+      const placeholder = f === "title" && isPlaceholderTitle(existing);
       if ((existing[f] === null || existing[f] === "" || placeholder) && parsed[f] !== null) update[f] = parsed[f];
     }
     if (!existing.address_key && key) update.address_key = key;
@@ -1036,7 +1038,7 @@ export async function importListing(
       last_checked_at: new Date().toISOString()
     };
     for (const f of COPY_FIELDS) row[f] = parsed[f];
-    if (!row.title && !row.address) row.title = `Listing on ${source.site}`;
+    if (!row.title && !row.address) row.title = placeholderTitle(parsed, source);
     Object.assign(row, missedOutPatch("saved", parsed.listing_status));
     const { data, error } = await admin.from("properties").insert(row).select("id").single();
     if (error) throw error;
@@ -1065,8 +1067,20 @@ export async function importListing(
     parse_status: (card?.parse_status as ImportResult["parse_status"]) ?? parseStatus,
     missing_fields: (card?.missing_fields as string[]) ?? missingFields(parsed),
     message,
+    label: where,
     summary: summary + leasedNote
   };
+}
+
+// A card made from a link alone is named from what the link says ("Apartment in Kew"),
+// until a share of the page gives it a real title.
+function placeholderTitle(p: Partial<Parsed>, source: Source) {
+  return p.property_type && p.suburb ? `${p.property_type} in ${p.suburb}` : `Listing on ${source.site}`;
+}
+
+function isPlaceholderTitle(card: Record<string, unknown>) {
+  const t = String(card.title ?? "");
+  return /^Listing on /.test(t) || t === `${card.property_type} in ${card.suburb}`;
 }
 
 function siteLabel(site: string) {
