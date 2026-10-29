@@ -30,7 +30,7 @@ jobs:
       - name: Collect the site files
         run: |
           mkdir _site
-          cp -r index.html manifest.json service-worker.js css js icons _site/
+          cp -r index.html manifest.json service-worker.js add-to-house-hunter.shortcut css js icons _site/
           # The #demo sample data only runs on localhost; leave it out of the live site.
           rm _site/js/demo.js
           touch _site/.nojekyll

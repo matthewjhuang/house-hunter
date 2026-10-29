@@ -69,7 +69,8 @@ function render() {
 
     <div class="group-header" id="shortcut">Share from REA &amp; Domain</div>
     <div class="group">
-      <button class="row" data-act="shortcut-help">${icon("share")}<span class="row-label">Set Up the iOS Shortcut</span>${icon("chevron", "icon chevron")}</button>
+      <a class="row" href="./add-to-house-hunter.shortcut" style="color:var(--tint)">${icon("share")}<span class="row-label">Get the Shortcut</span></a>
+      <button class="row" data-act="shortcut-help">${icon("info")}<span class="row-label">How It Works</span>${icon("chevron", "icon chevron")}</button>
       ${hasToken
         ? `<button class="row" data-act="token-new"><span class="row-label" style="color:var(--tint)">Make a New Token</span></button>
            <button class="row btn-destructive" data-act="token-revoke"><span class="row-label">Revoke Token</span></button>`
@@ -175,15 +176,21 @@ export function openShortcutHelp(token) {
         <div class="group-header">Endpoint</div>
         <div class="group"><div class="token-box" id="endpoint">${esc(endpoint)}</div>
           <button class="row" data-copy="endpoint" style="color:var(--tint)">Copy Endpoint</button></div>
-        <div class="group-header">Build it once (about 2 minutes)</div>
+        <div class="group-header">Add it to your iPhone (1 minute)</div>
         <div class="group"><ol class="onboard-steps">
-          <li><span class="step-num">1</span><span>Open <strong>Shortcuts</strong>, tap <strong>+</strong>, and name it <strong>Add to House Hunter</strong>.</span></li>
-          <li><span class="step-num">2</span><span>Tap the <strong>ⓘ</strong> (or the name at the top → Details) and turn on <strong>Show in Share Sheet</strong>. Set it to receive <strong>URLs</strong> and <strong>Text</strong>.</span></li>
-          <li><span class="step-num">3</span><span>Add <strong>Get URLs from Input</strong> (input: Shortcut Input).</span></li>
-          <li><span class="step-num">4</span><span><em>Optional, helps with realestate.com.au:</em> add <strong>Get Contents of URL</strong> with the URLs from step 3, method GET. This reads the listing on your phone, which the sites rarely block.</span></li>
-          <li><span class="step-num">5</span><span>Add another <strong>Get Contents of URL</strong>. URL: the endpoint above. Method: <strong>POST</strong>. Headers: <strong>Authorization</strong> = <code>Bearer</code> followed by a space and your token. Request Body: <strong>JSON</strong>, key <code>url</code> (Text) = the URLs from step 3. If you did step 4, add key <code>html</code> (Text) = its Contents of URL.</span></li>
-          <li><span class="step-num">6</span><span>Add <strong>Show Notification</strong> with the Contents of URL from step 5. It says what was added.</span></li>
+          <li><span class="step-num">1</span><span>${token ? "Copy the token above." : "Create your token in Settings and copy it."}</span></li>
+          <li><span class="step-num">2</span><span>On your iPhone, tap <a href="./add-to-house-hunter.shortcut"><strong>Get the Shortcut</strong></a>, then <strong>Add Shortcut</strong>.</span></li>
+          <li><span class="step-num">3</span><span>When it asks, paste your token. Done.</span></li>
         </ol></div>
+        <p class="group-footer">If the Shortcut ever stops working, make a new token here and re-add it.</p>
+        <details class="group" style="margin-top:12px"><summary class="row" style="color:var(--tint)">Build it by hand instead</summary><ol class="onboard-steps">
+          <li><span class="step-num">1</span><span>Open <strong>Shortcuts</strong>, tap <strong>+</strong>, and name it <strong>Add to House Hunter</strong>.</span></li>
+          <li><span class="step-num">2</span><span>Tap the name at the top → <strong>Details</strong>, turn on <strong>Show in Share Sheet</strong>, and set it to receive <strong>URLs</strong> and <strong>Text</strong>.</span></li>
+          <li><span class="step-num">3</span><span>Add <strong>Get URLs from Input</strong>, then <strong>Get Item from List</strong> (First Item).</span></li>
+          <li><span class="step-num">4</span><span>Add <strong>Get Contents of URL</strong> with that item, method GET. This reads the listing on your phone.</span></li>
+          <li><span class="step-num">5</span><span>Add another <strong>Get Contents of URL</strong>: URL the endpoint above, method <strong>POST</strong>, header <strong>Authorization</strong> = <code>Bearer</code> + space + your token, Request Body <strong>JSON</strong> with <code>url</code> = the item from step 3 and <code>html</code> = the Contents of URL from step 4.</span></li>
+          <li><span class="step-num">6</span><span>Add <strong>Show Notification</strong> with the Contents of URL from step 5.</span></li>
+        </ol></details>
         <div class="group-header">Using it</div>
         <div class="group"><div class="row"><span class="row-label">In the REA or Domain app, open a listing, tap <strong>Share</strong> ${icon("share", "share-glyph")}, then <strong>Add to House Hunter</strong>. The card shows up on both your boards in a few seconds.</span></div></div>
         <p class="group-footer">The same steps are in the project README.</p>`;
