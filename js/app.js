@@ -35,79 +35,66 @@ let pendingRoute = null;
 
 // ---------------------------------------------------------------- auth
 
-let authEmail = "";
+// Email + password, like Life OS. Only the two invited emails can create an account
+// (a database trigger refuses anyone else), and each of you sets a password once.
+let creating = false;
 
 function showAuth() {
   appEl.hidden = true;
   authEl.hidden = false;
-  document.getElementById("auth-email-form").hidden = false;
-  document.getElementById("auth-code-form").hidden = true;
+  setAuthMode(false);
   setTimeout(() => document.getElementById("auth-email").focus(), 50);
+}
+
+function setAuthMode(create) {
+  creating = create;
+  document.getElementById("auth-title").textContent = create ? "Create your password" : "House Hunter";
+  document.getElementById("auth-hint").textContent = create
+    ? "First time on House Hunter? Use your invited email and choose a password (at least 8 characters)."
+    : "Sign in with your email and password.";
+  document.getElementById("auth-submit").textContent = create ? "Create Account" : "Sign In";
+  document.getElementById("auth-toggle").textContent = create ? "I already have a password" : "First time? Create your password";
+  document.getElementById("auth-password").setAttribute("autocomplete", create ? "new-password" : "current-password");
+  document.getElementById("auth-error").textContent = "";
 }
 
 function friendlyAuthError(error) {
   const m = error?.message ?? "";
   if (/database error saving new user|not_invited|signups not allowed/i.test(m)) return "This email isn't on the House Hunter invite list.";
-  if (/rate limit|too many|security purposes/i.test(m)) return "Too many codes requested. Wait a minute, then try again.";
-  if (/expired|invalid|otp/i.test(m)) return "That code didn't work. Check it, or send a new one.";
+  if (/already registered|already exists/i.test(m)) return "You already have an account. Sign in instead.";
+  if (/invalid login credentials/i.test(m)) return "Wrong email or password.";
+  if (/email not confirmed/i.test(m)) return "Email confirmation is still on in Supabase (see the README, step 2).";
+  if (/password/i.test(m) && /least|short|weak/i.test(m)) return "Choose a longer password (at least 8 characters).";
+  if (/rate limit|too many/i.test(m)) return "Too many tries. Wait a minute, then try again.";
   if (!navigator.onLine) return "You're offline. Connect and try again.";
   return m || "Something went wrong. Try again.";
 }
 
-document.getElementById("auth-email-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const input = document.getElementById("auth-email");
-  const errorEl = document.getElementById("auth-email-error");
-  const button = document.getElementById("auth-email-submit");
-  authEmail = input.value.trim().toLowerCase();
-  errorEl.textContent = "";
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(authEmail)) {
-    errorEl.textContent = "Enter your email address.";
-    input.focus();
-    return;
-  }
-  button.disabled = true;
-  button.textContent = "Sending…";
-  const { error } = await supabase.auth.signInWithOtp({
-    email: authEmail,
-    options: { emailRedirectTo: `${location.origin}${location.pathname}`, shouldCreateUser: true }
-  });
-  button.disabled = false;
-  button.textContent = "Send Code";
-  if (error) {
-    errorEl.textContent = friendlyAuthError(error);
-    return;
-  }
-  document.getElementById("auth-email-form").hidden = true;
-  document.getElementById("auth-code-form").hidden = false;
-  document.getElementById("auth-code-hint").textContent = `We sent a code to ${authEmail}. Type it here — the link in the email only signs in the browser it opens in.`;
-  setTimeout(() => document.getElementById("auth-code").focus(), 50);
-});
+document.getElementById("auth-toggle").addEventListener("click", () => setAuthMode(!creating));
 
-document.getElementById("auth-code-form").addEventListener("submit", async (e) => {
+document.getElementById("auth-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const input = document.getElementById("auth-code");
-  const errorEl = document.getElementById("auth-code-error");
-  const button = document.getElementById("auth-code-submit");
-  const token = input.value.replace(/\D/g, "");
+  const email = document.getElementById("auth-email").value.trim().toLowerCase();
+  const password = document.getElementById("auth-password").value;
+  const errorEl = document.getElementById("auth-error");
+  const button = document.getElementById("auth-submit");
   errorEl.textContent = "";
-  if (token.length < 6) {
-    errorEl.textContent = "Enter the code from the email.";
-    return;
-  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { errorEl.textContent = "Enter your email address."; return; }
+  if (creating && password.length < 8) { errorEl.textContent = "Choose a password of at least 8 characters."; return; }
+  if (!password) { errorEl.textContent = "Enter your password."; return; }
+
   button.disabled = true;
-  const { error } = await supabase.auth.verifyOtp({ email: authEmail, token, type: "email" });
+  const { data, error } = creating
+    ? await supabase.auth.signUp({ email, password })
+    : await supabase.auth.signInWithPassword({ email, password });
   button.disabled = false;
   if (error) {
     errorEl.textContent = friendlyAuthError(error);
-    input.select();
+    return;
   }
+  // signUp returns no session while Supabase still asks for email confirmation.
+  if (creating && !data.session) errorEl.textContent = "Account made, but Supabase still wants an email confirmation. Turn off \"Confirm email\" (README, step 2), then sign in.";
 });
-document.getElementById("auth-code").addEventListener("input", (e) => {
-  const digits = e.target.value.replace(/\D/g, "");
-  if (digits.length === 6 || digits.length === 8) document.getElementById("auth-code-form").requestSubmit();
-});
-document.getElementById("auth-code-back").addEventListener("click", showAuth);
 
 // ---------------------------------------------------------------- app shell
 
@@ -143,7 +130,6 @@ function initPlaceholder(el, id, title, glyph, heading, text) {
 
 function parseRoute() {
   const hash = location.hash.replace(/^#\/?/, "");
-  if (/access_token=|error_description=|type=magiclink/.test(hash)) return { tab: "board" };
   const [path, query] = hash.split("?");
   const parts = path.split("/").filter(Boolean);
   const params = new URLSearchParams(query ?? "");
@@ -242,12 +228,6 @@ async function boot() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./service-worker.js").catch((err) => console.warn("Service worker not registered", err));
   }
-  if (/access_token=/.test(location.hash)) {
-    // supabase-js has read the magic-link tokens; tidy the URL.
-    await supabase.auth.getSession();
-    history.replaceState(null, "", `${location.pathname}#/board`);
-  }
-
   const { data } = await supabase.auth.getSession();
   if (data.session) showApp(data.session.user);
   else showAuth();

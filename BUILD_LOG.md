@@ -48,3 +48,11 @@ checklist ratings, comments, Move to…, reject with reason/note, edit and missi
 Backend tested against a throwaway household (since deleted): invite gate, RLS isolation
 from the real household, Shortcut import of blocked links, cross-site merge by address,
 and both cron jobs end to end through pg_net + Vault.
+
+## Stage 1.1 — Password sign-in (29 Oct 2026)
+
+Swapped the emailed-code sign-in for email + password, as in Life OS. The code flow needed
+custom SMTP (Supabase's built-in email only reaches organisation members) and edited email
+templates — a lot of setup for two fixed accounts. Now: "Create your password" once, then
+Sign In; sessions persist. The only dashboard step is turning off "Confirm email"; the
+`auth.users` invite trigger still blocks anyone else. Cache bumped to v2.

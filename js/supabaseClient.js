@@ -19,5 +19,5 @@ export const isConfigured = SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANO
 export const supabase = createClient(
   isConfigured ? SUPABASE_URL : "https://placeholder.supabase.co",
   isConfigured ? SUPABASE_ANON_KEY : "placeholder-anon-key",
-  { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit" } }
+  { auth: { persistSession: true, autoRefreshToken: true } }
 );

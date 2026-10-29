@@ -107,3 +107,9 @@ Everything uses the SF system font. Text sizes come from `font: -apple-system-bo
 - On each iPhone: install the PWA, allow notifications, and add the Shortcut.
 
 **Heads-up:** free Supabase projects pause after a week with no activity. The daily cron job may not count as activity, so this needs watching.
+
+## Changed after review (29 Oct)
+
+Sign-in is **email + password** instead of a magic link / emailed code. With exactly two
+fixed users it's simpler: no SMTP, no email templates, and each person sets a password
+once. The invite trigger still refuses any other email.

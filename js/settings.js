@@ -141,7 +141,7 @@ async function onClick(e) {
       render();
       toast("Token revoked");
     } else if (act === "sign-out") {
-      if (!(await confirmDestructive("Sign out?", "You'll need a new code from your email to sign back in.", "Sign Out"))) return;
+      if (!(await confirmDestructive("Sign out?", "You'll need your password to sign back in.", "Sign Out"))) return;
       await disablePush().catch(() => {});
       await supabase.auth.signOut();
     }

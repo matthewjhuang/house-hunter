@@ -58,25 +58,19 @@
     </defs>
   </svg>
 
-  <!-- Sign in: email, then the 6-digit code from the same email (the link only works in a browser). -->
+  <!-- Sign in: email + password. "Create your password" is only needed the first time. -->
   <div id="auth" class="auth" hidden>
     <img class="app-icon" src="./icons/icon-192.png" alt="" width="80" height="80" />
-    <form id="auth-email-form" novalidate>
-      <h1 class="t-large-title">House Hunter</h1>
-      <p>Sign in with your email. We'll send you a code — no password needed.</p>
+    <form id="auth-form" novalidate>
+      <h1 class="t-large-title" id="auth-title">House Hunter</h1>
+      <p id="auth-hint">Sign in with your email and password.</p>
       <label class="visually-hidden" for="auth-email">Email</label>
-      <input class="field" type="email" id="auth-email" autocomplete="email" inputmode="email" placeholder="you@example.com" required />
-      <div class="error" id="auth-email-error" role="alert"></div>
-      <button class="btn btn-filled btn-wide" type="submit" id="auth-email-submit">Send Code</button>
-    </form>
-    <form id="auth-code-form" novalidate hidden>
-      <h1 class="t-large-title">Check your email</h1>
-      <p id="auth-code-hint">Enter the code we sent you.</p>
-      <label class="visually-hidden" for="auth-code">Sign-in code</label>
-      <input class="field code" type="text" id="auth-code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="••••••" required />
-      <div class="error" id="auth-code-error" role="alert"></div>
-      <button class="btn btn-filled btn-wide" type="submit" id="auth-code-submit">Sign In</button>
-      <button class="btn btn-plain btn-wide" type="button" id="auth-code-back">Use a different email</button>
+      <input class="field" type="email" id="auth-email" autocomplete="username" inputmode="email" placeholder="Email" required />
+      <label class="visually-hidden" for="auth-password">Password</label>
+      <input class="field" type="password" id="auth-password" autocomplete="current-password" placeholder="Password" required />
+      <div class="error" id="auth-error" role="alert"></div>
+      <button class="btn btn-filled btn-wide" type="submit" id="auth-submit">Sign In</button>
+      <button class="btn btn-plain btn-wide" type="button" id="auth-toggle">First time? Create your password</button>
     </form>
   </div>
 

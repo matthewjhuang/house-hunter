@@ -55,9 +55,7 @@ python3 -m http.server 5501
 ```
 
 - `http://localhost:5501/#demo` — the whole UI with sample data, no sign-in. Nothing is saved.
-- `http://localhost:5501/` — the real app against Supabase. Add `http://localhost:5501` to
-  Supabase → Authentication → URL Configuration → Redirect URLs if you want the email link
-  (not just the code) to work locally.
+- `http://localhost:5501/` — the real app against Supabase (same sign-in as the live site).
 
 The service worker caches the app shell, so after editing files reload twice (or tick
 "Update on reload" in DevTools → Application → Service Workers).
@@ -82,28 +80,18 @@ project. To rebuild from scratch, run the files in order in the SQL Editor (or
 - `pg_cron` runs `send-reminders` every 5 minutes and `recheck-listings` daily at 19:00 UTC
   (5–6am Melbourne). They authenticate with a random secret stored in Supabase Vault.
 
-### 2. ✋ Auth settings (Supabase dashboard → Authentication)
+### 2. ✋ Auth setting (one switch)
 
-1. **URL Configuration** → Site URL: `https://matthewjhuang.github.io/house-hunter/`.
-   Add the same URL under Redirect URLs.
-2. **Emails → Templates**: edit both **Magic Link** and **Confirm signup** so they include
-   the code as well as the link. For example, for the body:
-   ```html
-   <h2>Your House Hunter code</h2>
-   <p style="font-size:28px;letter-spacing:4px"><strong>{{ .Token }}</strong></p>
-   <p>Type this code into House Hunter. Or, if you're in a browser, <a href="{{ .ConfirmationURL }}">tap here to sign in</a>.</p>
-   ```
-   Why: on iPhone, a link in an email opens Safari, which can't sign in the installed
-   Home Screen app. The code works everywhere.
-3. **Emails → SMTP Settings** (important): Supabase's built-in email only delivers to
-   members of your Supabase organisation, and only a couple per hour. Hannah won't get a
-   code until you either
-   - turn on **custom SMTP** — e.g. Gmail: host `smtp.gmail.com`, port `587`, username your
-     Gmail address, password a Google [App Password](https://myaccount.google.com/apppasswords),
-     sender your Gmail address; or
-   - invite Hannah to the Supabase organisation (Organization → Team).
+Sign-in is email + password, like Life OS. Only the two invited emails can create an
+account; each of you creates your password once, on first sign-in, and the app keeps you
+signed in after that.
 
-   Custom SMTP is the better long-term option.
+Supabase dashboard → **Authentication → Sign In / Providers → Email** → turn **off**
+"Confirm email" → Save. (No emails are sent, so no SMTP or templates are needed. It's
+safe because the invite trigger refuses every other email.)
+
+Forgot a password? Ask Claude (or run SQL in the dashboard) to set a new one:
+`update auth.users set encrypted_password = extensions.crypt('new-password', extensions.gen_salt('bf')) where email = '…';`
 
 ### 3. ✋ Push notifications (VAPID keys)
 
@@ -166,7 +154,8 @@ every push to `main` deploys via `.github/workflows/deploy.yml`.
 
 1. Open https://matthewjhuang.github.io/house-hunter/ in **Safari**.
 2. Share → **Add to Home Screen** → Add. Open House Hunter from the Home Screen.
-3. Sign in with your email and type the code from the email.
+3. Tap **First time? Create your password**, enter your invited email and a password
+   (8+ characters), then **Create Account**. After that it's just **Sign In**.
 4. Tap **Turn On Reminders** when asked (or Settings → Notifications). iPhone only allows
    notifications for Home Screen apps, iOS 16.4 or later.
 5. Settings → Budget: set your max rent per week. Cards above it show "Over budget".
