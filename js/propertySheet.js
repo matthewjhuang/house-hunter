@@ -152,7 +152,7 @@ const RENDER = {
     }
     if (p.listing_status && p.listing_status !== "active") {
       const label = { removed: "The listing has been taken down.", leased: "The agent has marked it leased.", under_application: "It's under application." }[p.listing_status];
-      out.push(`<div class="notice">${icon("warn")}<div><strong>${esc(label)}</strong>Found by the daily check.</div></div>`);
+      out.push(`<div class="notice">${icon("warn")}<div><strong>${esc(label)}</strong>From the listing on ${esc(siteName(p.sources?.[0]?.site ?? "the site"))}.</div></div>`);
     }
     const missing = (p.missing_fields ?? []).filter((f) => FIELD_LABELS[f]);
     if ((p.parse_status === "blocked" || p.parse_status === "partial") && missing.length) {

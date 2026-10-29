@@ -894,6 +894,28 @@ export interface ImportResult {
   summary: string;
 }
 
+export const STATUS_LABEL: Record<string, string> = {
+  active: "Available",
+  under_application: "Under application",
+  leased: "Leased",
+  removed: "Listing removed"
+};
+
+// A listing that's leased before you've been approved is off the table, so its card
+// moves to Rejected as "Missed out" (restorable). From Approved on, "leased" most
+// likely means leased to you, so those cards stay put.
+const STILL_HUNTING = ["saved", "inspection_booked", "inspected", "applied"];
+export function missedOutPatch(stage: string, status: string | null): Record<string, unknown> {
+  if (status !== "leased" || !STILL_HUNTING.includes(stage)) return {};
+  return {
+    stage: "rejected",
+    rejected_reason: "missed_out",
+    rejected_note: "Leased to someone else.",
+    rejected_from_stage: stage,
+    position: Date.now() / 1000
+  };
+}
+
 const COPY_FIELDS = [
   "title", "address", "suburb", "state", "postcode", "latitude", "longitude", "rent_pw", "bond", "beds", "baths",
   "cars", "property_type", "available_date", "description", "agent_name", "agency", "agent_phone", "agent_email"
@@ -972,6 +994,17 @@ export async function importListing(
     if ((existing.parse_status === "blocked" || existing.parse_status === "partial") && parseStatus !== "blocked") {
       update.parse_status = coreMissing(after) ? "partial" : "ok";
     }
+    // The site's word on availability, recorded like the daily check does.
+    if (parsed.listing_status && parsed.listing_status !== existing.listing_status) {
+      await admin.from("property_changes").insert({
+        property_id: propertyId, household_id: householdId, kind: "status",
+        old_value: STATUS_LABEL[existing.listing_status as string] ?? existing.listing_status,
+        new_value: STATUS_LABEL[parsed.listing_status]
+      });
+      update.listing_status = parsed.listing_status;
+      update.has_unseen_changes = true;
+      Object.assign(update, missedOutPatch(existing.stage as string, parsed.listing_status));
+    }
     if (Object.keys(update).length) {
       const { error } = await admin.from("properties").update(update).eq("id", propertyId);
       if (error) throw error;
@@ -990,6 +1023,7 @@ export async function importListing(
     };
     for (const f of COPY_FIELDS) row[f] = parsed[f];
     if (!row.title && !row.address) row.title = `Listing on ${source.site}`;
+    Object.assign(row, missedOutPatch("saved", parsed.listing_status));
     const { data, error } = await admin.from("properties").insert(row).select("id").single();
     if (error) throw error;
     propertyId = data.id;
@@ -1002,20 +1036,22 @@ export async function importListing(
     );
   }
 
-  const { data: card } = await admin.from("properties").select("address, suburb, title, missing_fields, parse_status").eq("id", propertyId).single();
+  const { data: card } = await admin.from("properties").select("address, suburb, title, missing_fields, parse_status, stage, rejected_reason").eq("id", propertyId).single();
   const where = card?.address ? `${card.address}${card.suburb ? ", " + card.suburb : ""}` : (card?.title ?? source.site);
   const cardStatus = card?.parse_status ?? parseStatus;
   const summary = cardStatus === "blocked"
     ? `Saved ${where}. ${siteLabel(source.site)} wouldn't share the details — open the listing in Safari and share it again to fill them in.`
     : parseStatus === "blocked" ? `${where} is already on your board`
     : merged ? `Filled in ${where}` : `Added ${where}`;
+  const leasedNote = card?.stage === "rejected" && card?.rejected_reason === "missed_out" && parsed.listing_status === "leased"
+    ? ". It's been leased, so it's in Rejected as Missed out." : "";
   return {
     property_id: propertyId,
     merged,
     parse_status: (card?.parse_status as ImportResult["parse_status"]) ?? parseStatus,
     missing_fields: (card?.missing_fields as string[]) ?? missingFields(parsed),
     message,
-    summary
+    summary: summary + leasedNote
   };
 }
 

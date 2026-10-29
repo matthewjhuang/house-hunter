@@ -2,25 +2,20 @@
 // Re-fetches every card that's still in play (not Rejected or Lease signed) and
 // records what changed: rent, "under application" / "leased", or the listing being
 // taken down. Each change is a property_changes row and sets has_unseen_changes,
-// which shows the badge on the card until someone opens it.
+// which shows the badge on the card until someone opens it. A listing leased before
+// you've been approved moves its card to Rejected as "Missed out".
 //
 // Sites that block us are skipped quietly (last_checked_at still moves on) rather
 // than counted as removed: only a 404/410, or a redirect away from the listing, means gone.
 // Domain links are checked through Domain's API when it's set up, and cards whose first
 // import was blocked get another go at filling their details in.
 import {
-  adminClient, domainConfigured, fetchDomainListing, fetchListing, importListing, isCronCall, json, parseListing, type Source
+  adminClient, domainConfigured, fetchDomainListing, fetchListing, importListing, isCronCall, json, missedOutPatch, parseListing,
+  STATUS_LABEL, type Source
 } from "../_shared/listing.ts";
 
 const MAX_PER_RUN = 40;
 const DELAY_MS = 1500;
-
-const STATUS_LABEL: Record<string, string> = {
-  active: "Available",
-  under_application: "Under application",
-  leased: "Leased",
-  removed: "Listing removed"
-};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok");
@@ -29,7 +24,7 @@ Deno.serve(async (req) => {
 
   const { data: properties, error } = await admin
     .from("properties")
-    .select("id, household_id, created_by, rent_pw, listing_status, parse_status, sources")
+    .select("id, household_id, created_by, stage, rent_pw, listing_status, parse_status, sources")
     .not("stage", "in", "(rejected,lease_signed)")
     .neq("listing_status", "removed")
     .order("last_checked_at", { ascending: true, nullsFirst: true })
@@ -47,6 +42,10 @@ Deno.serve(async (req) => {
       try {
         const result = await importListing(admin, property.household_id, property.created_by, sources[0].url);
         if (result.parse_status !== "blocked") report.filled++;
+        // The refill may have recorded a new status already; compare against that.
+        const { data: fresh } = await admin.from("properties").select("stage, rent_pw, listing_status").eq("id", property.id).single();
+        if (fresh) Object.assign(property, fresh);
+        if (property.stage === "rejected") continue;
       } catch (err) {
         console.error("refill failed", property.id, err);
       }
@@ -93,6 +92,7 @@ Deno.serve(async (req) => {
         new_value: STATUS_LABEL[newStatus] ?? newStatus
       });
       update.listing_status = newStatus;
+      Object.assign(update, missedOutPatch(property.stage, newStatus));
     }
     if (changes.length) {
       update.has_unseen_changes = true;
