@@ -916,15 +916,15 @@ export async function importListing(
     const api = await fetchDomainListing(source.listing_id);
     if (api.status === "ok" && api.parsed) fromApi = api.parsed;
   }
-  let fetched: FetchResult = fromApi
-    ? { status: "ok", httpStatus: 200, html: "", finalUrl: source.url }
-    : await fetchListing(source.url);
-  // Real Domain/REA pages load the bot-check script too, so a page only counts as a
-  // bot check when it also lacks the listing data.
+  // The page as the phone saw it wins: our own request can get a stand-in page that
+  // looks fine but holds no listing. Real Domain/REA pages load the bot-check script
+  // too, so the shared page is judged by whether it has the listing data.
   const looksLikeListing = (html: string) => /application\/ld\+json|__NEXT_DATA__|ArgonautExchange|og:title/.test(html);
-  if (fetched.status !== "ok" && providedHtml && providedHtml.length > 2000 && looksLikeListing(providedHtml)) {
-    fetched = { status: "ok", httpStatus: 200, html: providedHtml.slice(0, 3_000_000), finalUrl: source.url };
-  }
+  const fetched: FetchResult = fromApi
+    ? { status: "ok", httpStatus: 200, html: "", finalUrl: source.url }
+    : providedHtml && providedHtml.length > 2000 && looksLikeListing(providedHtml)
+    ? { status: "ok", httpStatus: 200, html: providedHtml.slice(0, 3_000_000), finalUrl: source.url }
+    : await fetchListing(source.url);
   const parsed = fromApi ?? (fetched.status === "ok" ? parseListing(fetched.html) : emptyParsed());
   const gotAnything = !!(parsed.address || parsed.rent_pw || parsed.beds);
   // Blocked: at least take the address from the link, so a later share of the same

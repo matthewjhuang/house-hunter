@@ -54,10 +54,15 @@ Deno.serve(async (req) => {
   if (!url) return text("House Hunter: no link found in what was shared.", 400);
 
   // What the phone managed to read, so a blocked import can be told apart from a bad page.
-  console.log("share-listing", url, "html", html ? `${html.length} chars, title: ${html.match(/<title>([^<]{0,80})/i)?.[1] ?? "none"}` : "none");
+  console.log("share-listing", url, "html", html ? `${html.length} chars, title: ${html.match(/<title[^>]*>([^<]{0,80})/i)?.[1] ?? "none"}` : "none");
+  if (html) {
+    const has = (re: RegExp) => (re.test(html!) ? "y" : "n");
+    console.log("share-listing html markers", `ld:${has(/application\/ld\+json/)} next:${has(/__NEXT_DATA__/)} script:${has(/<script/i)} escaped:${has(/&lt;script/i)}`, JSON.stringify(html.slice(0, 200)));
+  }
 
   try {
     const result = await importListing(admin, owner.household_id, owner.user_id, url, html);
+    console.log("share-listing result", result.parse_status, result.message ?? "");
     return text(result.summary);
   } catch (err) {
     console.error("share-listing failed", url, err);
