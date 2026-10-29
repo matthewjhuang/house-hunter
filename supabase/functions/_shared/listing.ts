@@ -7,6 +7,8 @@
 //   3. Open Graph / meta tags, then plain-text patterns in the page
 // REA and Domain often refuse requests from servers. That isn't an error here: the
 // caller still gets a card holding the URL, with every field listed as missing.
+// Domain links skip all of this and use Domain's official API when its credentials
+// are set (see "Domain API" below).
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export { adminClient, CORS_HEADERS, isCronCall, json } from "./http.ts";
@@ -61,6 +63,9 @@ export interface Source {
 // Fields shown as "missing" on a card. Photos and inspections are useful but not
 // required, so they're listed only when nothing at all came through.
 export const KEY_FIELDS = ["address", "rent_pw", "beds", "baths", "cars", "available_date", "bond", "agent_name", "photo_urls"] as const;
+// A card is only flagged "Needs details" when one of these is missing — the rest
+// (bond especially, which Domain's API doesn't give) can stay blank.
+const CORE_FIELDS = ["address", "rent_pw", "beds"] as const;
 
 function emptyParsed(): Parsed {
   return {
@@ -685,7 +690,10 @@ export function parseListing(html: string): Parsed {
   fromJsonLd(p, html);
   fromEmbedded(p, html);
   fromMeta(p, html);
+  return tidy(p);
+}
 
+function tidy(p: Parsed): Parsed {
   // Upcoming inspections only, de-duplicated, soonest first.
   const now = Date.now() - 60 * 60 * 1000;
   const seen = new Set<string>();
@@ -699,11 +707,152 @@ export function parseListing(html: string): Parsed {
   return p;
 }
 
+function coreMissing(p: Partial<Parsed>) {
+  return CORE_FIELDS.some((k) => p[k] === null || p[k] === undefined || p[k] === "");
+}
+
 export function missingFields(p: Partial<Parsed>): string[] {
   return KEY_FIELDS.filter((k) => {
     const v = p[k];
     return v === null || v === undefined || (Array.isArray(v) && v.length === 0);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Domain API (developer.domain.com.au, free tier). Domain refuses page requests from
+// servers, so Domain links are read from the API when either is set as an Edge
+// Function secret:
+//   DOMAIN_API_KEY                           sent as X-API-Key, or
+//   DOMAIN_CLIENT_ID + DOMAIN_CLIENT_SECRET  OAuth client credentials
+// The API has everything except bond. Agent and agency names cost one extra call
+// each and are skipped quietly if the plan doesn't include them.
+
+const DOMAIN_API = "https://api.domain.com.au/v1";
+let domainToken: { value: string; expires: number } | null = null;
+
+export function domainConfigured() {
+  return !!(Deno.env.get("DOMAIN_API_KEY") || (Deno.env.get("DOMAIN_CLIENT_ID") && Deno.env.get("DOMAIN_CLIENT_SECRET")));
+}
+
+async function domainHeaders(): Promise<Record<string, string> | null> {
+  const key = Deno.env.get("DOMAIN_API_KEY");
+  if (key) return { "X-API-Key": key, Accept: "application/json" };
+  const id = Deno.env.get("DOMAIN_CLIENT_ID");
+  const secret = Deno.env.get("DOMAIN_CLIENT_SECRET");
+  if (!id || !secret) return null;
+  if (!domainToken || domainToken.expires < Date.now() + 60_000) {
+    // Ask for agency details too; fall back to listings only if the plan doesn't have them.
+    for (const scope of ["api_listings_read api_agencies_read", "api_listings_read"]) {
+      const res = await fetch("https://auth.domain.com.au/v1/connect/token", {
+        method: "POST",
+        headers: { Authorization: `Basic ${btoa(`${id}:${secret}`)}`, "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ grant_type: "client_credentials", scope })
+      });
+      if (res.ok) {
+        const t = await res.json();
+        domainToken = { value: t.access_token, expires: Date.now() + (Number(t.expires_in) || 3600) * 1000 };
+        break;
+      }
+      console.error("Domain token request failed", res.status, (await res.text()).slice(0, 200));
+    }
+    if (!domainToken) return null;
+  }
+  return { Authorization: `Bearer ${domainToken.value}`, Accept: "application/json" };
+}
+
+async function domainGet(path: string, headers: Record<string, string>) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    return await fetch(`${DOMAIN_API}${path}`, { headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const PROPERTY_TYPES: Record<string, string> = {
+  apartmentUnitFlat: "Apartment", house: "House", townhouse: "Townhouse", studio: "Studio", duplex: "Duplex",
+  semiDetached: "Semi-detached", terrace: "Terrace", villa: "Villa", penthouse: "Penthouse", newApartments: "Apartment"
+};
+
+export interface DomainResult {
+  status: "ok" | "gone" | "error";
+  parsed?: Parsed;
+  removed?: boolean;
+  message?: string;
+}
+
+export async function fetchDomainListing(listingId: string): Promise<DomainResult> {
+  const headers = await domainHeaders();
+  if (!headers) return { status: "error", message: "Domain API credentials were refused" };
+  let res: Response;
+  try {
+    res = await domainGet(`/listings/${encodeURIComponent(listingId)}`, headers);
+  } catch {
+    return { status: "error", message: "Domain's API didn't respond" };
+  }
+  if (res.status === 404 || res.status === 410) return { status: "gone" };
+  if (!res.ok) {
+    console.error("Domain listing request failed", res.status, (await res.text()).slice(0, 200));
+    return { status: "error", message: `Domain's API returned an error (${res.status})` };
+  }
+  // deno-lint-ignore no-explicit-any
+  const l: any = await res.json();
+  const p = emptyParsed();
+  const a = l.addressParts ?? {};
+  applyAddress(p, str(a.displayAddress));
+  if (!p.address && a.street && a.streetNumber) {
+    setIfEmpty(p, "address", `${a.unitNumber ? `${a.unitNumber}/` : ""}${a.streetNumber} ${titleCase(String(a.street))}`);
+  }
+  setIfEmpty(p, "suburb", a.suburb ? titleCase(String(a.suburb)) : null);
+  setIfEmpty(p, "state", str(a.stateAbbreviation)?.toUpperCase() ?? null);
+  setIfEmpty(p, "postcode", str(a.postcode));
+  setIfEmpty(p, "latitude", typeof l.geoLocation?.latitude === "number" ? l.geoLocation.latitude : null);
+  setIfEmpty(p, "longitude", typeof l.geoLocation?.longitude === "number" ? l.geoLocation.longitude : null);
+  const price = l.priceDetails ?? {};
+  setIfEmpty(p, "rent_pw", parseRent(str(price.displayPrice)) ?? (typeof price.price === "number" && price.price < 5000 ? Math.round(price.price) : null));
+  setIfEmpty(p, "beds", toInt(l.bedrooms));
+  setIfEmpty(p, "baths", toInt(l.bathrooms));
+  setIfEmpty(p, "cars", toInt(l.carspaces));
+  const type = Array.isArray(l.propertyTypes) ? String(l.propertyTypes[0] ?? "") : "";
+  setIfEmpty(p, "property_type", PROPERTY_TYPES[type] ?? (type ? titleCase(type.replace(/([a-z])([A-Z])/g, "$1 $2")) : null));
+  setIfEmpty(p, "available_date", parseDate(str(l.dateAvailable)));
+  setIfEmpty(p, "bond", toInt(l.bond ?? l.rentalDetails?.bond));
+  setIfEmpty(p, "title", str(l.headline));
+  setIfEmpty(p, "description", l.description ? stripTags(String(l.description)).slice(0, 2000) : null);
+  setIfEmpty(p, "photo_urls", (Array.isArray(l.media) ? l.media : [])
+    .filter((m: { category?: string; type?: string; url?: string }) => m?.category === "image" && m?.type !== "floorplan" && typeof m.url === "string")
+    .map((m: { url: string }) => m.url)
+    .slice(0, 30));
+  for (const i of Array.isArray(l.inspectionDetails?.inspections) ? l.inspectionDetails.inspections : []) {
+    const start = str(i?.openingDateTime ?? i?.startTime ?? i?.start);
+    const end = str(i?.closingDateTime ?? i?.endTime ?? i?.end);
+    const startIso = start ? melbourneInstant(start) : null;
+    if (startIso) p.inspections.push({ starts_at: startIso, ends_at: end ? melbourneInstant(end) : null });
+  }
+  const status = String(l.status ?? "").toLowerCase();
+  if (/leased/.test(status)) p.listing_status = "leased";
+  else if (/underoffer|deposit|application/.test(status)) p.listing_status = "under_application";
+  const removed = /archived|withdrawn|offmarket|sold|expired/.test(status);
+
+  // Agent and agency: best effort, never blocks the import.
+  const contactId = l.advertiserIdentifiers?.contactIds?.[0];
+  const agencyId = l.advertiserIdentifiers?.advertiserId;
+  const [agentRes, agencyRes] = await Promise.allSettled([
+    contactId ? domainGet(`/agents/${contactId}`, headers).then((r) => (r.ok ? r.json() : null)) : Promise.resolve(null),
+    agencyId ? domainGet(`/agencies/${agencyId}`, headers).then((r) => (r.ok ? r.json() : null)) : Promise.resolve(null)
+  ]);
+  const agent = agentRes.status === "fulfilled" ? agentRes.value : null;
+  if (agent) {
+    const name = str(agent.name) ?? [str(agent.firstName), str(agent.lastName)].filter(Boolean).join(" ");
+    setIfEmpty(p, "agent_name", name || null);
+    setIfEmpty(p, "agent_phone", str(agent.mobile) ?? str(agent.phone) ?? str(agent.mobilePhone));
+    setIfEmpty(p, "agent_email", decodeEmail(agent.email ?? agent.emailAddress));
+  }
+  const agency = agencyRes.status === "fulfilled" ? agencyRes.value : null;
+  if (agency) setIfEmpty(p, "agency", str(agency.name) ?? str(agency.profile?.agencyName));
+
+  return { status: "ok", parsed: tidy(p), removed };
 }
 
 // ---------------------------------------------------------------------------
@@ -735,15 +884,22 @@ export async function importListing(
   const url = validateUrl(rawUrl);
   if (!url) throw new Error("That doesn't look like a listing link");
   const source = sourceFor(url);
-  let fetched = await fetchListing(source.url);
+  let fromApi: Parsed | null = null;
+  if (source.site === "domain.com.au" && source.listing_id && domainConfigured()) {
+    const api = await fetchDomainListing(source.listing_id);
+    if (api.status === "ok" && api.parsed) fromApi = api.parsed;
+  }
+  let fetched: FetchResult = fromApi
+    ? { status: "ok", httpStatus: 200, html: "", finalUrl: source.url }
+    : await fetchListing(source.url);
   if (fetched.status !== "ok" && providedHtml && providedHtml.length > 2000 && !BLOCK_MARKERS.slice(0, 2).some((m) => m.test(providedHtml.slice(0, 5000)))) {
     fetched = { status: "ok", httpStatus: 200, html: providedHtml.slice(0, 3_000_000), finalUrl: source.url };
   }
-  const parsed = fetched.status === "ok" ? parseListing(fetched.html) : emptyParsed();
+  const parsed = fromApi ?? (fetched.status === "ok" ? parseListing(fetched.html) : emptyParsed());
   const key = addressKey(parsed.address, parsed.suburb);
   const gotAnything = !!(parsed.address || parsed.rent_pw || parsed.beds);
   const parseStatus: ImportResult["parse_status"] =
-    fetched.status !== "ok" || !gotAnything ? "blocked" : missingFields(parsed).length ? "partial" : "ok";
+    fetched.status !== "ok" || !gotAnything ? "blocked" : coreMissing(parsed) ? "partial" : "ok";
   const message = fetched.status === "ok"
     ? (gotAnything ? null : "The page loaded but didn't contain listing details")
     : fetched.message ?? "Couldn't load the listing";
@@ -778,7 +934,9 @@ export async function importListing(
     }
     const after = { ...existing, ...update } as Partial<Parsed>;
     update.missing_fields = missingFields(after);
-    if (existing.parse_status === "blocked" && parseStatus !== "blocked") update.parse_status = parseStatus;
+    if ((existing.parse_status === "blocked" || existing.parse_status === "partial") && parseStatus !== "blocked") {
+      update.parse_status = coreMissing(after) ? "partial" : "ok";
+    }
     if (Object.keys(update).length) {
       const { error } = await admin.from("properties").update(update).eq("id", propertyId);
       if (error) throw error;

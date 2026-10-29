@@ -12,6 +12,7 @@ import {
 import { openSheet, openMenu, toast, showError, confirmDestructive, onLongPress, enableSwipeRows, swipeRow } from "./ui.js";
 import { moveMenuItems, rejectFlow, restore, deleteFlow, setBooked } from "./actions.js";
 import { openEdit } from "./editSheet.js";
+import { supabase } from "./supabaseClient.js";
 
 let openId = null;
 let unsubscribe = null;
@@ -158,7 +159,7 @@ const RENDER = {
       const site = siteName(p.sources?.[0]?.site ?? "the site");
       out.push(`<div class="notice">${icon("warn")}<div><strong>${p.parse_status === "blocked" ? `${esc(site)} didn't let us read this listing` : "Some details are missing"}</strong>
         Missing: ${missing.map((f) => esc(FIELD_LABELS[f])).join(", ")}.
-        <div><button class="btn btn-plain bold" style="padding:0;min-height:40px" data-act="edit">Fill In Details</button></div></div></div>`);
+        <div style="display:flex;gap:16px"><button class="btn btn-plain bold" style="padding:0;min-height:40px" data-act="retry">Try Again</button><button class="btn btn-plain" style="padding:0;min-height:40px" data-act="edit">Fill In by Hand</button></div></div></div>`);
     }
     const changes = changesFor(p.id);
     if (changes.length) {
@@ -288,6 +289,25 @@ const RENDER = {
   }
 };
 
+// Re-runs the import for a card's first link; the server merges anything it can now
+// read into this same card (e.g. once the Domain API is set up).
+async function retryImport(p, button) {
+  const url = p.sources?.[0]?.url;
+  if (!url) return;
+  button.disabled = true;
+  button.textContent = "Reading…";
+  try {
+    const { data, error } = await supabase.functions.invoke("parse-listing", { body: { url } });
+    if (error) throw error;
+    toast(data.parse_status === "blocked" ? "Still couldn't read it — the site is blocking us" : "Details filled in");
+  } catch (err) {
+    showError(err, "Couldn't reach the listing");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Try Again";
+  }
+}
+
 const noteOpen = new Set();
 let editingComment = null;
 
@@ -312,6 +332,8 @@ async function onClick(e, id, body, sheet) {
     restore(id);
   } else if (t.dataset.act === "edit") {
     openEdit(id, { highlightMissing: true });
+  } else if (t.dataset.act === "retry") {
+    retryImport(p, t);
   } else if (t.dataset.act === "more") {
     const desc = body.querySelector("#desc");
     const expanded = desc.classList.toggle("clamped") === false;

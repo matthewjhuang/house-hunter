@@ -109,6 +109,23 @@ regenerate the pair (`npx web-push generate-vapid-keys`), update both, and every
 turn notifications off and on again in Settings. Until the secrets are set,
 `send-reminders` replies "VAPID keys aren't set yet" and sends nothing.
 
+### 3b. ✋ Domain API (so Domain links fill in automatically)
+
+Domain blocks page requests from servers, so Domain links are read from Domain's official
+API instead. It's free (developer.domain.com.au).
+
+1. Sign up at https://developer.domain.com.au and **Create Project** (any name, e.g. House Hunter).
+2. In the project, **API Access → Add API** → choose **Agents & Listings**, free plan.
+3. **Credentials → Create** → choose **OAuth client** (recommended) or **API Key**.
+4. In Supabase → Edge Functions → **Secrets**, add either
+   - `DOMAIN_CLIENT_ID` and `DOMAIN_CLIENT_SECRET` (OAuth client), or
+   - `DOMAIN_API_KEY` (API key).
+5. Open any blocked Domain card and tap **Try Again**. Cards also repair themselves on the
+   next daily re-check.
+
+The API has everything except bond. REA has no public API, so REA links still rely on the
+page (or the Shortcut fetching it on your phone).
+
 ### 4. Edge Functions
 
 All four are deployed. To redeploy after changes (Supabase CLI):
@@ -134,7 +151,8 @@ generically); then Open Graph / meta tags and page text. Duplicate properties (t
 rental on REA and Domain) are merged on a normalised address (`3/12 smith st brunswick`),
 keeping both links.
 
-**Expect blocking.** Both sites usually refuse requests from servers (in testing: Domain 403,
+**Expect blocking.** With the Domain API set up (3b), Domain links don't touch the website
+at all. Otherwise both sites usually refuse requests from servers (in testing: Domain 403,
 REA 429). That's handled: the card is still created with the link, marked "Needs details",
 and the edit sheet opens with the missing fields highlighted. The iOS Shortcut can also
 fetch the page on your phone (step 4 below), which the sites block far less often; the

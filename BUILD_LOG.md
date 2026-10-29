@@ -56,3 +56,12 @@ custom SMTP (Supabase's built-in email only reaches organisation members) and ed
 templates — a lot of setup for two fixed accounts. Now: "Create your password" once, then
 Sign In; sessions persist. The only dashboard step is turning off "Confirm email"; the
 `auth.users` invite trigger still blocks anyone else. Cache bumped to v2.
+
+## Stage 1.2 — Domain API (29 Oct 2026)
+
+The first real link (a Domain listing) came back blocked, as expected from servers. Rather
+than fight the bot check, Domain links now go through Domain's official API
+(`/v1/listings/{id}`, API key or OAuth client credentials) when its secrets are set, with
+agent/agency names as best-effort extra calls. "Needs details" now only shows when address,
+rent or beds are missing (the API has no bond). Blocked cards get a **Try Again** button,
+and the daily re-check re-imports blocked/partial cards so they repair themselves. Cache v3.

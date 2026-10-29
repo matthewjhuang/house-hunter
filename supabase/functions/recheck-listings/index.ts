@@ -6,7 +6,11 @@
 //
 // Sites that block us are skipped quietly (last_checked_at still moves on) rather
 // than counted as removed: only a 404/410, or a redirect away from the listing, means gone.
-import { adminClient, fetchListing, isCronCall, json, parseListing, type Source } from "../_shared/listing.ts";
+// Domain links are checked through Domain's API when it's set up, and cards whose first
+// import was blocked get another go at filling their details in.
+import {
+  adminClient, domainConfigured, fetchDomainListing, fetchListing, importListing, isCronCall, json, parseListing, type Source
+} from "../_shared/listing.ts";
 
 const MAX_PER_RUN = 40;
 const DELAY_MS = 1500;
@@ -25,18 +29,28 @@ Deno.serve(async (req) => {
 
   const { data: properties, error } = await admin
     .from("properties")
-    .select("id, household_id, rent_pw, listing_status, sources")
+    .select("id, household_id, created_by, rent_pw, listing_status, parse_status, sources")
     .not("stage", "in", "(rejected,lease_signed)")
     .neq("listing_status", "removed")
     .order("last_checked_at", { ascending: true, nullsFirst: true })
     .limit(MAX_PER_RUN);
   if (error) return json({ error: error.message }, 500);
 
-  const report = { checked: 0, changed: 0, blocked: 0 };
+  const report = { checked: 0, changed: 0, blocked: 0, filled: 0 };
   for (const property of properties ?? []) {
     const sources = (property.sources as Source[]) ?? [];
     if (!sources.length) continue;
     report.checked++;
+
+    // Fill in a card the first import couldn't read (merges into this same card).
+    if (property.parse_status === "blocked" || property.parse_status === "partial") {
+      try {
+        const result = await importListing(admin, property.household_id, property.created_by, sources[0].url);
+        if (result.parse_status !== "blocked") report.filled++;
+      } catch (err) {
+        console.error("refill failed", property.id, err);
+      }
+    }
 
     let gone = 0;
     let newRent: number | null = null;
@@ -44,6 +58,15 @@ Deno.serve(async (req) => {
     const inspections: { starts_at: string; ends_at: string | null }[] = [];
 
     for (const source of sources) {
+      if (source.site === "domain.com.au" && source.listing_id && domainConfigured()) {
+        const api = await fetchDomainListing(source.listing_id);
+        if (api.status === "gone" || api.removed) { gone++; continue; }
+        if (api.status !== "ok" || !api.parsed) { report.blocked++; continue; }
+        if (api.parsed.rent_pw && newRent === null) newRent = api.parsed.rent_pw;
+        if (api.parsed.listing_status && api.parsed.listing_status !== "active") newStatus = api.parsed.listing_status;
+        inspections.push(...api.parsed.inspections);
+        continue;
+      }
       const res = await fetchListing(source.url);
       if (res.status === "gone") { gone++; continue; }
       if (res.status !== "ok") { report.blocked++; continue; }
