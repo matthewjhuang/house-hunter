@@ -11,7 +11,7 @@
 //   - Transitous (transitous.org, PTV's timetables) for public transport, arrive-by
 //   - OSRM (routing.openstreetmap.de) for car and walking times. It has no traffic,
 //     so car times are multiplied by PEAK_FACTOR as a rush-hour allowance
-//   - Overpass (OpenStreetMap) for stations and tram stops
+//   - Transitous again for nearby stations and tram stops (PTV stop list)
 //
 // Called three ways (deployed with verify_jwt off; it checks callers itself):
 //   - Database triggers, with x-cron-secret, when a property or place is added or its
@@ -198,34 +198,31 @@ function metres(a: Point, b: Point) {
 interface Stop extends Point {
   kind: "train" | "tram";
   name: string;
-  routes: string | null;
+  stop_no: string | null;
 }
 
+const TRAIN_MODES = ["SUBWAY", "RAIL", "SUBURBAN", "REGIONAL_RAIL", "METRO", "HIGHSPEED_RAIL", "LONG_DISTANCE"];
+const RADIUS = { train: 2500, tram: 1200 };
+
+// Stops come from Transitous too (PTV's own stop list), which is steadier than Overpass.
 async function nearestStops(at: Point) {
-  const { lat, lng } = at;
-  const query = `[out:json][timeout:20];(
-    nwr(around:2500,${lat},${lng})[railway=station][!disused][!"railway:historic"];
-    nwr(around:1200,${lat},${lng})[railway=tram_stop];
-    nwr(around:1200,${lat},${lng})[public_transport=platform][tram=yes];
-  );out center tags 80;`;
-  const d = await getJson("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ data: query })
-  });
+  const dLat = RADIUS.train / 111_000;
+  const dLng = dLat / Math.cos((at.lat * Math.PI) / 180);
+  const params = new URLSearchParams({ min: `${at.lat - dLat},${at.lng - dLng}`, max: `${at.lat + dLat},${at.lng + dLng}` });
+  const list = await getJson(`https://api.transitous.org/api/v1/map/stops?${params}`);
   const byKey = new Map<string, Stop>();
-  for (const e of d.elements ?? []) {
-    const t = e.tags ?? {};
-    const point = { lat: e.lat ?? e.center?.lat, lng: e.lon ?? e.center?.lon };
-    if (!t.name || point.lat == null) continue;
-    const kind = t.railway === "station" && t.station !== "light_rail" ? "train" : "tram";
-    // Tram stops are named like "Stop 36: Hope Street".
-    const name = kind === "tram" ? t.name.replace(/^Stop\s+\w+\s*:\s*/i, "") : t.name.replace(/\s+(railway\s+)?station$/i, "");
+  for (const s of list ?? []) {
+    const modes: string[] = s.modes ?? [];
+    const kind = modes.some((m) => TRAIN_MODES.includes(m)) ? "train" : modes.includes("TRAM") ? "tram" : null;
+    if (!kind || !s.name) continue;
+    const point = { lat: s.lat, lng: s.lon };
+    if (metres(at, point) > RADIUS[kind]) continue;
+    // "Anstey Railway Station"; "Albion St/Sydney Rd #26" (one entry per direction).
+    const stopNo = kind === "tram" ? s.name.match(/#\s*(\w+)\s*$/)?.[1] ?? null : null;
+    const name = s.name.replace(/\s*#\s*\w+\s*$/, "").replace(/\s+(railway\s+)?station$/i, "").trim();
     const key = `${kind}:${name.toLowerCase()}`;
     const existing = byKey.get(key);
-    if (!existing || (!existing.routes && t.route_ref) || metres(at, point) < metres(at, existing)) {
-      byKey.set(key, { kind, name, routes: t.route_ref ? String(t.route_ref).split(";").join(", ") : existing?.routes ?? null, ...point });
-    }
+    if (!existing || metres(at, point) < metres(at, existing)) byKey.set(key, { kind, name, stop_no: stopNo, ...point });
   }
   const result = [];
   for (const kind of ["train", "tram"] as const) {
@@ -238,7 +235,7 @@ async function nearestStops(at: Point) {
     });
     if (best < 0) continue;
     const s = candidates[best];
-    result.push({ kind, name: s.name, routes: s.routes, walk_s: Math.round(durations[0][best]!), distance_m: Math.round(distances[0][best] ?? metres(at, s)) });
+    result.push({ kind, name: s.name, stop_no: s.stop_no, walk_s: Math.round(durations[0][best]!), distance_m: Math.round(distances[0][best] ?? metres(at, s)) });
   }
   return result;
 }
