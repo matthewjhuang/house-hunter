@@ -46,7 +46,11 @@ Deno.serve(async (req) => {
     return text("House Hunter: couldn't read what was shared.", 400);
   }
 
-  const url = extractUrl(raw);
+  // Shared from Safari, the "text" can be the page title rather than its address, so
+  // fall back to the link the page gives for itself.
+  const pageUrl = html?.match(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']+)["']/i)?.[1]
+    ?? html?.match(/<meta[^>]+property=["']og:url["'][^>]*content=["']([^"']+)["']/i)?.[1] ?? "";
+  const url = extractUrl(raw) ?? extractUrl(pageUrl);
   if (!url) return text("House Hunter: no link found in what was shared.", 400);
 
   // What the phone managed to read, so a blocked import can be told apart from a bad page.
