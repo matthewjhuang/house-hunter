@@ -911,8 +911,10 @@ export async function importListing(
     existing = data;
   }
   if (!existing) {
+    // jsonb containment needs the JSON text: .contains() with an array of objects would
+    // send a Postgres array literal and silently match nothing.
     const { data } = await admin.from("properties").select("*").eq("household_id", householdId)
-      .contains("sources", [{ url: source.url }]).limit(1).maybeSingle();
+      .filter("sources", "cs", JSON.stringify([{ url: source.url }])).limit(1).maybeSingle();
     existing = data;
   }
 
