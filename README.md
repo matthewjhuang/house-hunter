@@ -31,6 +31,9 @@ js/editSheet.js       Edit / add-by-hand sheet
 js/addSheet.js        Paste-a-link sheet → parse-listing
 js/actions.js         Move / reject / restore / delete, shared by the board and sheet
 js/settings.js        Settings tab, Shortcut token
+js/places.js          Places tab and the add / edit place sheet
+js/travel.js          "Getting around" on the property sheet, travel line on cards
+js/map.js             Map tab (MapLibre + OpenFreeMap, loaded on first open)
 js/push.js            Web Push subscribe / unsubscribe / test
 js/onboarding.js      Add to Home Screen + reminders prompts
 js/ui.js              Sheets, context menus, alerts, toasts, long-press, swipe rows
@@ -45,7 +48,8 @@ BUILD_LOG.md          What was built and why, stage by stage
 ```
 
 Routes are hash-based so GitHub Pages never sees them and refreshes always work:
-`#/board`, `#/p/<id>`, `#/add?url=…`, `#/map`, `#/places`, `#/settings`. Plain
+`#/board`, `#/p/<id>`, `#/add?url=…`, `#/map`, `#/map/p/<id>` (a listing opened over the
+map), `#/places`, `#/settings`. Plain
 `?url=…` links (and Android's share target) are turned into `#/add` on load.
 
 ## Run it locally
@@ -77,7 +81,7 @@ project. To rebuild from scratch, run the files in order in the SQL Editor (or
   the first migration. To change an email:
   `update household_invites set email = 'new@example.com' where email = 'old@example.com';`
 - New cards get the 11-item inspection checklist automatically.
-- `pg_cron` runs `send-reminders` every 5 minutes and `recheck-listings` daily at 19:00 UTC
+- `pg_cron` runs `travel-times` nightly at 16:30 UTC (3:30am Melbourne in summer), `send-reminders` every 5 minutes and `recheck-listings` daily at 19:00 UTC
   (5–6am Melbourne). They authenticate with a random secret stored in Supabase Vault.
 
 ### 2. ✋ Auth setting (one switch)
@@ -128,14 +132,14 @@ page (or the Shortcut fetching it on your phone).
 
 ### 4. Edge Functions
 
-All four are deployed. To redeploy after changes (Supabase CLI):
+All five are deployed. To redeploy after changes (Supabase CLI):
 
 ```bash
 supabase functions deploy parse-listing --project-ref esifddbuuyztqcqqebgx
 ```
 
 ```bash
-supabase functions deploy share-listing recheck-listings send-reminders --no-verify-jwt --project-ref esifddbuuyztqcqqebgx
+supabase functions deploy share-listing recheck-listings send-reminders travel-times --no-verify-jwt --project-ref esifddbuuyztqcqqebgx
 ```
 
 | Function | Called by | Auth |
@@ -144,6 +148,7 @@ supabase functions deploy share-listing recheck-listings send-reminders --no-ver
 | `share-listing` | the iOS Shortcut | personal token from Settings (hash stored) |
 | `recheck-listings` | pg_cron, daily | `x-cron-secret` from Vault |
 | `send-reminders` | pg_cron every 5 min; Settings → "Send a Test Notification" | `x-cron-secret`, or session for the test |
+| `travel-times` | database triggers (new or changed property or place), pg_cron nightly, the sheet's Recalculate | `x-cron-secret`, or session for Recalculate |
 
 **How listing import works.** The function fetches the page and reads, in order: JSON-LD;
 embedded app data (Domain's `__NEXT_DATA__` by its exact shape, REA's `ArgonautExchange`
@@ -222,14 +227,39 @@ Share menu lists House Hunter once it's installed (`share_target` in the manifes
 
 ---
 
-## Phase 2 (not built yet)
+## Places, travel times and the map
 
-Map and Places tabs currently show a "Coming in Phase 2" screen. Planned: essential places
-per person, nearest train/tram stop with walking time, car and public transport times for
-a weekday 8:30am arrival via the Google Routes API (server-side key, results cached in a
-`travel_times` table), and a map of active properties coloured by stage. That needs two
-Google Maps Platform keys (a server key as a Supabase secret, and a browser key restricted to
-`matthewjhuang.github.io`).
+- **Places tab.** Each of you adds the places you go every week (work, study, the gym,
+  family), each one yours, Hannah's or both of yours. Turn on **Show on Cards** for the one
+  or two that matter most.
+- **Getting around** on every listing that isn't Rejected: the nearest train station and tram
+  stop with the walk to each, then public transport and car times to every place, for a
+  weekday trip arriving 8:30am. Tap a place to get directions in Google Maps or type in your
+  own time (yours always wins and is never overwritten). Cards show the public transport
+  time to the Show on Cards places and the walk to the nearest stop.
+- **Map tab.** Every listing that isn't Rejected as a price pin in its stage colour, and
+  your places as square markers. Filter by stage, tap a pin for a preview, tap the preview to
+  open the listing.
+
+**No keys, no billing.** Everything is free, open data:
+
+| What | Service | Notes |
+| --- | --- | --- |
+| Addresses → coordinates | [Photon](https://photon.komoot.io) (OpenStreetMap) | Nominatim refuses requests from Supabase's servers |
+| Public transport | [Transitous](https://transitous.org) (PTV timetables) | Arrive-by routing; also supplies the nearby stop list |
+| Car and walking | [OSRM](https://routing.openstreetmap.de) (FOSSGIS) | No traffic data, so car times are × 1.6 as a rush-hour allowance and shown with "~" |
+| Map | [OpenFreeMap](https://openfreemap.org) tiles, drawn by MapLibre | Light and dark styles follow the phone |
+
+They're community-run, so they can be slow or down for a while. Failed times are stored as
+errors and retried by the nightly run, or straight away with **Recalculate** at the bottom of
+Getting around.
+
+**How it runs.** `travel_times` caches one row per listing, place and mode. Database
+triggers call `travel-times` when a listing or place is added, its address changes, or a
+listing comes back from Rejected (so the import functions don't need to know). A new address
+clears the old coordinates unless the same update brings new ones (as imports do). Listings
+that only match a suburb get no times: the sheet asks you to check the address. The
+nightly run fills gaps and refreshes anything older than four weeks.
 
 ## Things to know
 

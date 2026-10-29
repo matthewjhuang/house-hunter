@@ -113,3 +113,11 @@ Everything uses the SF system font. Text sizes come from `font: -apple-system-bo
 Sign-in is **email + password** instead of a magic link / emailed code. With exactly two
 fixed users it's simpler: no SMTP, no email templates, and each person sets a password
 once. The invite trigger still refuses any other email.
+
+## Phase 2 (built 30 Oct)
+
+Places per person, travel times from every active listing to every place (public
+transport and car, weekday 8:30am arrival), the nearest train station and tram stop with
+the walk to each, and a Map tab. Planned on Google Maps Platform; built on free open-data
+services instead (Photon, Transitous, OSRM, OpenFreeMap) because Google needs a card on file.
+See the README ("Places, travel times and the map") and BUILD_LOG Stage 2.

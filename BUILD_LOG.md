@@ -80,3 +80,39 @@ Shares from the REA/Domain apps only carry a link, which no automated request ca
 so the Shortcut now saves the card and opens the listing in Safari (`x-safari-https://`)
 for one more Share tap; share-listing replies "Opening it in Safari" to trigger that, and
 tells you to turn on Allow Running Scripts if a Safari share arrives empty. Cache v9.
+
+## Stage 2 — Places, travel times and the map (30 Oct 2026)
+
+**Free services instead of Google.** The plan was Google Maps Platform, but Google needs a
+card on file even for free usage, so it's all open data with no keys: Photon for geocoding,
+Transitous (MOTIS over PTV's GTFS) for arrive-by public transport and the nearby stop list,
+FOSSGIS OSRM for car and walking, and OpenFreeMap vector tiles drawn by MapLibre. Checked
+before building: Brunswick → Collins St came back as 40 min on the Upfield line (with Metro
+Tunnel stations in the alternatives). Found while testing from Supabase: Nominatim answers
+Supabase's servers with 403 (hence Photon), Overpass was flaky (502/406, hence Transitous'
+stop list, which is PTV's own data anyway), and CARTO's raster basemaps now need an API key
+(hence OpenFreeMap, which has a dark style). OSRM has no traffic, so car times are × 1.6 and
+labelled "~".
+
+**Database.** One migration: `places` (owner or both, kind, Show on Cards, coordinates and
+geocode status), `travel_times` (one row per listing × place × mode, with a fingerprint of
+the coordinates so unchanged pairs aren't recomputed), and `geocode_status` /
+`nearest_stops` on properties. People can read times and update only `manual_s` (column
+grant); everything else is written by the function. Triggers clear stale coordinates when an
+address changes and call `travel-times` through pg_net, so the import code is untouched.
+Tested end to end against a throwaway household (since deleted): geocode → stops → both
+modes, from the trigger path.
+
+**Design.** Places is a grouped list per person with kind tiles, an "On cards" tag, and inline
+"Finding it on the map…" / "Address not found" states that update live. The add sheet uses
+chips for kind, a segmented control for whose, and an iOS switch for Show on Cards (on by
+default for work and study). On the sheet, Getting around sits after Inspections; your own
+time is entered inline (no second sheet, since sheets never stack) and tagged "Yours". The
+map is full-bleed with floating chips, a fit button below them, and a preview card above the
+tab bar; listings open over the map at `#/map/p/<id>` and closing returns there. Price pins
+use the stage colours with dark text in dark mode, where those colours are bright.
+
+**Tested** in the browser pane with `#demo` (sample places, times and stops), phone size,
+light and dark: Places list/add/edit states, Getting around, typing your own time (and that
+the card follows), map pins, filters, preview, opening and closing a listing from the map.
+Cache v10.
