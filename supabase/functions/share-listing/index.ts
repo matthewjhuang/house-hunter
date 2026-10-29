@@ -63,9 +63,6 @@ Deno.serve(async (req) => {
   try {
     const result = await importListing(admin, owner.household_id, owner.user_id, url, html);
     console.log("share-listing result", result.parse_status, result.message ?? "", "missing:", result.missing_fields.join(","));
-    // Where REA keeps its agent details, while the REA parser is being tuned.
-    const at = html?.search(/listers\\?"/) ?? -1;
-    if (at >= 0) console.log("share-listing listers", JSON.stringify(html!.slice(at, at + 400)));
     return text(result.summary);
   } catch (err) {
     console.error("share-listing failed", url, err);
