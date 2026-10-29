@@ -7,10 +7,14 @@ Sign it on a Mac (needs iCloud) to make the file people can import:
 
 What it does when you share a listing:
   0. Text: your House Hunter token (asked once, when the Shortcut is added)
-  1. Get URLs from the shared item, 2. take the first one
-  3. Get Contents of URL — reads the listing on the phone (sites rarely block phones)
-  4. POST { url, html } to the share-listing Edge Function with "Bearer <token>"
-  5. Show Notification with the reply ("Added 4/17 Clyde Street, Kew East")
+  1. Text: whatever was shared (apps share a bare link, "Check out … https://…" text,
+     or a rich item — as text, all of them contain the link)
+  2. Match Text https?://… and 3. take the first match
+  4. If a link was found: 5. Get Contents of URL — reads the listing on the phone
+     (sites rarely block phones)
+  7. POST { url, html } to the share-listing Edge Function with "Bearer <token>"
+     (with no link, the reply says so instead of the Shortcut erroring)
+  8. Show Notification with the reply ("Added 4/17 Clyde Street, Kew East")
 """
 import plistlib
 import uuid
@@ -52,17 +56,32 @@ def dictionary(items):
     }
 
 
-token, urls, first, page, reply = uid(), uid(), uid(), uid(), uid()
+token, shared, matches, first, page, reply = uid(), uid(), uid(), uid(), uid(), uid()
+group = uid()
+
+shared_text = {
+    "WFSerializationType": "WFTextTokenString",
+    "Value": {"string": OBJ, "attachmentsByRange": {"{0, 1}": {"Type": "ExtensionInput"}}},
+}
 
 actions = [
     {"WFWorkflowActionIdentifier": "is.workflow.actions.gettext",
      "WFWorkflowActionParameters": {"UUID": token, "WFTextActionText": ""}},
-    {"WFWorkflowActionIdentifier": "is.workflow.actions.detect.link",
-     "WFWorkflowActionParameters": {"UUID": urls, "WFInput": attachment(extension_input=True)}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.gettext",
+     "WFWorkflowActionParameters": {"UUID": shared, "WFTextActionText": shared_text}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.text.match",
+     "WFWorkflowActionParameters": {"UUID": matches, "WFMatchTextPattern": r"https?://[^\s<>\"']+",
+                                    "WFMatchTextCaseSensitive": False, "text": text_with("", shared, "Text")}},
     {"WFWorkflowActionIdentifier": "is.workflow.actions.getitemfromlist",
-     "WFWorkflowActionParameters": {"UUID": first, "WFInput": attachment(urls, "URLs"), "WFItemSpecifier": "First Item"}},
+     "WFWorkflowActionParameters": {"UUID": first, "WFInput": attachment(matches, "Matches"), "WFItemSpecifier": "First Item"}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.conditional",
+     "WFWorkflowActionParameters": {"UUID": uid(), "GroupingIdentifier": group, "WFControlFlowMode": 0,
+                                    "WFCondition": 100,  # "has any value"
+                                    "WFInput": {"Type": "Variable", "Variable": attachment(first, "Item from List")}}},
     {"WFWorkflowActionIdentifier": "is.workflow.actions.downloadurl",
      "WFWorkflowActionParameters": {"UUID": page, "WFURL": text_with("", first, "Item from List"), "WFHTTPMethod": "GET"}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.conditional",
+     "WFWorkflowActionParameters": {"UUID": uid(), "GroupingIdentifier": group, "WFControlFlowMode": 2}},
     {"WFWorkflowActionIdentifier": "is.workflow.actions.downloadurl",
      "WFWorkflowActionParameters": {
          "UUID": reply,
