@@ -7,15 +7,18 @@ Sign it on a Mac (needs iCloud) to make the file people can import:
 
 What it does when you share a listing:
   0. Text: your House Hunter token (asked once, when the Shortcut is added)
-  1. Text: whatever was shared, 2-3. the first https://… link in it
-  4. Get Type of what was shared
-  5. If it's a Safari web page: 6. Run JavaScript on it to read the page exactly as
+  1-2. Get URLs from Input, first one: the link, whether a Safari page, a link or text
+     was shared (the text of a Safari page is only its title)
+  3. Get Type of what was shared
+  4. If it's a Safari web page: 5. Run JavaScript on it to read the page exactly as
      you're seeing it (the sites can't block this — it's already loaded)
-  8. POST { url, html, source } to share-listing with "Bearer <token>"
-  9. Show Notification with the reply ("Filled in 4/17 Clyde Street, Kew East")
-  10. Shared from the REA/Domain apps (only a link, which the sites won't let anyone
-     read): the reply says "Opening it in Safari", so 11-12 open the listing in Safari
+  7. POST { url, html, source } to share-listing with "Bearer <token>"
+  8. Show Notification with the reply ("Filled in 4/17 Clyde Street, Kew East")
+  9. Shared from the REA/Domain apps (only a link, which the sites won't let anyone
+     read): the reply says "Opening it in Safari", so 10-11 open the listing in Safari
      (x-safari-https:// keeps it out of the apps) for one more Share tap.
+
+On a Mac, Safari also needs Develop → Allow JavaScript from Apple Events.
 """
 import plistlib
 import uuid
@@ -57,13 +60,8 @@ def dictionary(items):
     }
 
 
-token, shared, matches, first, kind, reply, safari_url = uid(), uid(), uid(), uid(), uid(), uid(), uid()
+token, links, first, kind, reply, safari_url = uid(), uid(), uid(), uid(), uid(), uid()
 outer, outer_end, reopen = uid(), uid(), uid()
-
-shared_text = {
-    "WFSerializationType": "WFTextTokenString",
-    "Value": {"string": OBJ, "attachmentsByRange": {"{0, 1}": {"Type": "ExtensionInput"}}},
-}
 
 
 def conditional(group, mode, **params):
@@ -75,13 +73,10 @@ def conditional(group, mode, **params):
 actions = [
     {"WFWorkflowActionIdentifier": "is.workflow.actions.gettext",
      "WFWorkflowActionParameters": {"UUID": token, "WFTextActionText": ""}},
-    {"WFWorkflowActionIdentifier": "is.workflow.actions.gettext",
-     "WFWorkflowActionParameters": {"UUID": shared, "WFTextActionText": shared_text}},
-    {"WFWorkflowActionIdentifier": "is.workflow.actions.text.match",
-     "WFWorkflowActionParameters": {"UUID": matches, "WFMatchTextPattern": r"https?://[^\s<>\"']+",
-                                    "WFMatchTextCaseSensitive": False, "text": text_with("", shared, "Text")}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.detect.link",
+     "WFWorkflowActionParameters": {"UUID": links, "WFInput": attachment(extension_input=True)}},
     {"WFWorkflowActionIdentifier": "is.workflow.actions.getitemfromlist",
-     "WFWorkflowActionParameters": {"UUID": first, "WFInput": attachment(matches, "Matches"), "WFItemSpecifier": "First Item"}},
+     "WFWorkflowActionParameters": {"UUID": first, "WFInput": attachment(links, "URLs"), "WFItemSpecifier": "First Item"}},
     {"WFWorkflowActionIdentifier": "is.workflow.actions.getitemtype",
      "WFWorkflowActionParameters": {"UUID": kind, "WFInput": attachment(extension_input=True)}},
     # If shared from Safari: read the page that's open.
