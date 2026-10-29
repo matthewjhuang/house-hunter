@@ -69,7 +69,7 @@ function render() {
 
     <div class="group-header" id="shortcut">Share from REA &amp; Domain</div>
     <div class="group">
-      <a class="row" href="./add-to-house-hunter.shortcut" style="color:var(--tint)">${icon("share")}<span class="row-label">Get the Shortcut</span></a>
+      <a class="row" href="./add-to-house-hunter.shortcut" download="Add to House Hunter.shortcut" style="color:var(--tint)">${icon("share")}<span class="row-label">Get the Shortcut</span></a>
       <button class="row" data-act="shortcut-help">${icon("info")}<span class="row-label">How It Works</span>${icon("chevron", "icon chevron")}</button>
       ${hasToken
         ? `<button class="row" data-act="token-new"><span class="row-label" style="color:var(--tint)">Make a New Token</span></button>
@@ -179,7 +179,7 @@ export function openShortcutHelp(token) {
         <div class="group-header">Add it to your iPhone (1 minute)</div>
         <div class="group"><ol class="onboard-steps">
           <li><span class="step-num">1</span><span>${token ? "Copy the token above." : "Create your token in Settings and copy it."}</span></li>
-          <li><span class="step-num">2</span><span>On your iPhone, tap <a href="./add-to-house-hunter.shortcut"><strong>Get the Shortcut</strong></a>, then <strong>Add Shortcut</strong>.</span></li>
+          <li><span class="step-num">2</span><span>On your iPhone, tap <a href="./add-to-house-hunter.shortcut" download="Add to House Hunter.shortcut"><strong>Get the Shortcut</strong></a> → <strong>Download</strong>, then open it from Safari's Downloads (the arrow at the bottom) and tap <strong>Add Shortcut</strong>.</span></li>
           <li><span class="step-num">3</span><span>When it asks, paste your token. Done.</span></li>
         </ol></div>
         <p class="group-footer">If the Shortcut ever stops working, make a new token here and re-add it.</p>

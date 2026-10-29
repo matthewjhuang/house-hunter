@@ -188,7 +188,10 @@ House Hunter, and the card appears on both boards filled in.
    and copy it (it's shown once).
 2. On your iPhone, open
    https://matthewjhuang.github.io/house-hunter/add-to-house-hunter.shortcut
-   (or tap **Get the Shortcut** in Settings) → **Add Shortcut**.
+   (or tap **Get the Shortcut** in Settings) → **Download**, then open it from Safari's
+   Downloads (the arrow at the bottom of the screen) → **Add Shortcut**.
+   Easier if your Mac uses the same Apple ID: double-click the file on the Mac and add it
+   there — iCloud syncs it to your iPhone.
 3. Paste your token when it asks.
 
 To use it: open a listing in the REA or Domain app (or Safari) → **Share** → **Add to House
