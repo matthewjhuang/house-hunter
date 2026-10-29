@@ -22,6 +22,25 @@ export const REJECT_REASONS = [
 ];
 export const reasonLabel = (id) => REJECT_REASONS.find((r) => r.id === id)?.label ?? "";
 
+export const PLACE_KINDS = [
+  { id: "work", label: "Work", icon: "briefcase" },
+  { id: "study", label: "Study", icon: "study" },
+  { id: "gym", label: "Gym", icon: "gym" },
+  { id: "shops", label: "Shops", icon: "cart" },
+  { id: "family", label: "Family", icon: "family" },
+  { id: "other", label: "Other", icon: "star" }
+];
+export const placeKind = (id) => PLACE_KINDS.find((k) => k.id === id) ?? PLACE_KINDS[PLACE_KINDS.length - 1];
+
+// "8 min", "1 hr 5 min"
+export function minutes(seconds) {
+  if (seconds === null || seconds === undefined) return "";
+  const m = Math.max(1, Math.round(seconds / 60));
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} hr${m % 60 ? ` ${m % 60} min` : ""}`;
+}
+
+export const distance = (m) => (m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`);
+
 export const FIELD_LABELS = {
   address: "Address",
   rent_pw: "Rent",

@@ -13,6 +13,7 @@ import { openSheet, openMenu, toast, showError, confirmDestructive, onLongPress,
 import { moveMenuItems, rejectFlow, restore, deleteFlow, setBooked } from "./actions.js";
 import { openEdit } from "./editSheet.js";
 import { supabase } from "./supabaseClient.js";
+import { travelSection, onTravelClick, onTravelSubmit } from "./travel.js";
 
 let openId = null;
 let unsubscribe = null;
@@ -21,13 +22,16 @@ export function isOpen(id) {
   return openId === id;
 }
 
-export function openProperty(id, { highlightMissing = false } = {}) {
+// from: "map" when opened over the Map tab, so closing it goes back there.
+export function openProperty(id, { highlightMissing = false, from = location.hash.startsWith("#/map") ? "map" : "board" } = {}) {
+  const base = from === "map" ? "#/map" : "#/board";
+  const route = from === "map" ? `#/map/p/${id}` : `#/p/${id}`;
   const p = store.properties.get(id);
   if (!p) {
     if (store.ready) toast("That listing isn't on the board any more");
     return;
   }
-  history.replaceState(null, "", `#/p/${id}`);
+  history.replaceState(null, "", route);
   openSheet({
     title: p.suburb || "Listing",
     label: title(p),
@@ -43,12 +47,12 @@ export function openProperty(id, { highlightMissing = false } = {}) {
       openId = null;
       unsubscribe?.();
       unsubscribe = null;
-      if (location.hash.startsWith(`#/p/${id}`)) history.replaceState(null, "", "#/board");
+      if (location.hash.startsWith(route)) history.replaceState(null, "", base);
     }
   });
 }
 
-const SECTIONS = ["gallery", "head", "notices", "inspections", "details", "agent", "links", "description", "checklist", "comments", "danger"];
+const SECTIONS = ["gallery", "head", "notices", "inspections", "travel", "details", "agent", "links", "description", "checklist", "comments", "danger"];
 
 function setup(id, body, sheet, highlightMissing) {
   openId = id;
@@ -195,6 +199,8 @@ const RENDER = {
       <p class="group-footer">Book a time to get a reminder ${esc(reminderText())} before it starts.</p>`;
   },
 
+  travel: travelSection,
+
   details(p) {
     const rows = [
       p.bond ? ["Bond", money(p.bond)] : null,
@@ -323,6 +329,7 @@ async function onClick(e, id, body, sheet) {
   if (!t) return;
   const p = store.properties.get(id);
   if (!p) return;
+  if (onTravelClick(t, p, body)) return;
 
   if (t.dataset.act === "move") {
     openMenu(t, moveMenuItems(p), { title: "Move to" });
@@ -401,6 +408,7 @@ async function onSubmit(e, id) {
   e.preventDefault();
   const form = e.target;
   try {
+    if (await onTravelSubmit(form, store.properties.get(id))) return;
     if (form.dataset.form === "add-inspection") {
       const input = form.querySelector("input");
       const iso = melbourneLocalToIso(input.value);

@@ -20,7 +20,9 @@ const state = {
   inspections: new Map(),
   comments: new Map(),
   checklist: new Map(),
-  changes: new Map()
+  changes: new Map(),
+  places: new Map(),
+  travel: new Map()
 };
 
 const listeners = new Set();
@@ -53,7 +55,9 @@ const TABLES = {
   inspection_times: "inspections",
   comments: "comments",
   checklist_items: "checklist",
-  property_changes: "changes"
+  property_changes: "changes",
+  places: "places",
+  travel_times: "travel"
 };
 
 async function fetchAll(table) {
@@ -175,6 +179,29 @@ export function changesFor(propertyId) {
   return [...state.changes.values()].filter((c) => c.property_id === propertyId).sort((a, b) => b.detected_at.localeCompare(a.detected_at));
 }
 
+// Places in display order: each person's (members' order), then both of yours.
+export function placesSorted() {
+  const owners = [...state.members.map((m) => m.user_id), null];
+  return [...state.places.values()].sort((a, b) =>
+    owners.indexOf(a.owner_id ?? null) - owners.indexOf(b.owner_id ?? null) || a.position - b.position);
+}
+
+// { place, transit, drive } for every place, transit/drive being travel_times rows.
+export function travelFor(propertyId) {
+  const rows = [...state.travel.values()].filter((t) => t.property_id === propertyId);
+  return placesSorted().map((place) => ({
+    place,
+    transit: rows.find((t) => t.place_id === place.id && t.mode === "transit") ?? null,
+    drive: rows.find((t) => t.place_id === place.id && t.mode === "drive") ?? null
+  }));
+}
+
+// Seconds for a travel_times row: the time someone typed in wins.
+export function travelSeconds(row) {
+  if (!row) return null;
+  return row.manual_s ?? (row.status === "ok" ? row.duration_s : null);
+}
+
 export function overBudgetBy(p) {
   const max = state.household?.max_rent_pw;
   return max && p.rent_pw && p.rent_pw > max ? p.rent_pw - max : 0;
@@ -245,7 +272,9 @@ export async function deleteProperty(id) {
 
 export async function upsertRow(table, row) {
   if (state.demo) return demoWrite(table, row);
-  const query = row.id ? supabase.from(table).update(row).eq("id", row.id) : supabase.from(table).insert(row);
+  // Updates leave the id out of the payload: travel_times only lets you write manual_s.
+  const { id, ...fields } = row;
+  const query = id ? supabase.from(table).update(fields).eq("id", id) : supabase.from(table).insert(row);
   const { data, error } = await query.select().single();
   if (error) throw error;
   applyLocal(table, data);

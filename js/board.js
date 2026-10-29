@@ -7,6 +7,7 @@ import { navBar, collapsingTitle, onLongPress, openMenu } from "./ui.js";
 import { moveWithUndo, moveMenuItems, rejectFlow, restore, deleteFlow, openListing, bookableInspection, setBooked } from "./actions.js";
 import { openProperty } from "./propertySheet.js";
 import { openAdd } from "./addSheet.js";
+import { cardTravel } from "./travel.js";
 
 const wide = window.matchMedia("(min-width: 768px)");
 const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
@@ -194,6 +195,7 @@ function cardHtml(p) {
     p.baths !== null && p.baths !== undefined ? `<span class="fact">${icon("bath")}${p.baths}<span class="visually-hidden"> bath${p.baths === 1 ? "" : "s"}</span></span>` : "",
     p.cars !== null && p.cars !== undefined ? `<span class="fact">${icon("car")}${p.cars}<span class="visually-hidden"> car space${p.cars === 1 ? "" : "s"}</span></span>` : ""
   ].join("");
+  const travel = cardTravel(p);
   const meta = [
     insp ? `<span class="${insp.booked ? "booked" : ""}">${icon("calendar")} ${insp.booked ? "Booked " : ""}${esc(inspectionLabel(insp))}</span>` : "",
     !insp && p.available_date ? `<span>${esc(availableLabel(p.available_date))}</span>` : "",
@@ -206,7 +208,8 @@ function cardHtml(p) {
     title(p), p.suburb,
     over ? `Over budget by ${money(over)}` : "",
     insp ? `${insp.booked ? "Booked inspection" : "Next inspection"} ${inspectionLabel(insp)}` : "",
-    comments ? `${comments} comments` : ""
+    comments ? `${comments} comments` : "",
+    travel.label
   ].filter(Boolean).join(", ");
 
   return `<button class="card" data-id="${p.id}" ${finePointer.matches ? 'draggable="true"' : ""} aria-label="${esc(label)}" aria-describedby="hint-card">
@@ -220,6 +223,7 @@ function cardHtml(p) {
       <div class="card-address">${esc(title(p))}</div>
       ${place(p) ? `<div class="card-suburb">${esc(place(p))}</div>` : ""}
       ${facts ? `<div class="facts">${facts}</div>` : ""}
+      ${travel.html ? `<div class="card-meta card-travel-row">${travel.html}</div>` : ""}
       ${meta ? `<div class="card-meta">${meta}</div>` : ""}
     </div>
   </button>`;
