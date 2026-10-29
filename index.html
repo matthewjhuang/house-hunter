@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>House Hunter</title>
+  <meta name="description" content="Our shared board for Melbourne rentals: listings, inspections, notes and applications." />
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="House Hunter" />
+  <meta name="format-detection" content="telephone=no" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+
+  <!-- SF Symbol–style glyphs, drawn on a 24pt grid. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-board" viewBox="0 0 24 24"><path d="M4 4.5h4.5v15H4a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1Zm6 0h4.5v15H10Zm6 0h4a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-4Z" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+      <symbol id="i-board-fill" viewBox="0 0 24 24"><path d="M4 3.7h5.2v16.6H4A1.8 1.8 0 0 1 2.2 18.5V5.5A1.8 1.8 0 0 1 4 3.7Zm6.6 0h2.8v16.6h-2.8Zm4.2 0H20a1.8 1.8 0 0 1 1.8 1.8v13a1.8 1.8 0 0 1-1.8 1.8h-5.2Z"/></symbol>
+      <symbol id="i-map" viewBox="0 0 24 24"><path d="m9 4.5-5.2 2v13l5.2-2 6 2 5.2-2v-13l-5.2 2-6-2Zm0 0v13m6-11v13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+      <symbol id="i-map-fill" viewBox="0 0 24 24"><path d="M8.2 3.6v14.3l-5 1.9a.8.8 0 0 1-1.1-.7V6.6a1 1 0 0 1 .6-.9Zm1.6 0 4.4 1.5v14.3l-4.4-1.5Zm6 1.5 5-1.9a.8.8 0 0 1 1.1.7v12.5a1 1 0 0 1-.6.9l-5.5 2.1Z"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21.2s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="10.2" r="2.3" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+      <symbol id="i-pin-fill" viewBox="0 0 24 24"><path d="M12 2.8a7.3 7.3 0 0 0-7.3 7.4c0 5.4 6.7 11.5 7 11.8a.5.5 0 0 0 .6 0c.3-.3 7-6.4 7-11.8A7.3 7.3 0 0 0 12 2.8Zm0 10a2.6 2.6 0 1 1 0-5.2 2.6 2.6 0 0 1 0 5.2Z"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><path d="M10.3 3h3.4l.5 2.4 1.6.9 2.3-.8 1.7 2.9-1.8 1.6v1.9l1.8 1.6-1.7 2.9-2.3-.8-1.6.9-.5 2.5h-3.4l-.5-2.5-1.6-.9-2.3.8-1.7-2.9L6 12.9V11L4.2 9.4l1.7-2.9 2.3.8 1.6-.9Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+      <symbol id="i-gear-fill" viewBox="0 0 24 24"><path d="M14.3 2.2h-4.6l-.6 2.7-1 .6-2.6-.9L3.2 8.6l2 1.8v1.2l-2 1.8 2.3 4 2.6-.9 1 .6.6 2.7h4.6l.6-2.7 1-.6 2.6.9 2.3-4-2-1.8v-1.2l2-1.8-2.3-4-2.6.9-1-.6ZM12 15.3a3.3 3.3 0 1 1 0-6.6 3.3 3.3 0 0 1 0 6.6Z"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 4.5v15M4.5 12h15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-bed" viewBox="0 0 24 24"><path d="M3 18.5v-11m0 7h18v4m0-4v-2.5a3 3 0 0 0-3-3h-7v5.5M6.8 11.3a1.6 1.6 0 1 0 0-.1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-bath" viewBox="0 0 24 24"><path d="M3 12h18v2a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5Zm3 0V6a2 2 0 0 1 3.7-1M7 19l-1 2m12-2 1 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-car" viewBox="0 0 24 24"><path d="M4 16.5v2h3v-2m10 0v2h3v-2M3.5 16.5h17v-4l-2-5.5h-13l-2 5.5Zm0-4h17M7 14.5h.01M17 14.5h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m3.5 16 5-5 4 4 2.5-2.5 5 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="15.5" cy="9.5" r="1.5"/></symbol>
+      <symbol id="i-house" viewBox="0 0 24 24"><path d="M3.5 11 12 4l8.5 7M6 9.2V20h4.5v-5.5h3V20H18V9.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-warn" viewBox="0 0 24 24"><path d="M10.3 4.2a2 2 0 0 1 3.4 0l7.5 13a2 2 0 0 1-1.7 3H4.5a2 2 0 0 1-1.7-3ZM12 9v4.5m0 3h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5.5M12 7.8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 9.5h17M8 3v4m8-4v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+      <symbol id="i-bubble" viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.5 3.1 8.5 7s-3.8 7-8.5 7c-.9 0-1.8-.1-2.6-.3L5 20l.9-3.6A6.6 6.6 0 0 1 3.5 11C3.5 7.1 7.3 4 12 4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3.5m0 0L8 7.5m4-4 4 4M8.5 10H6a1.5 1.5 0 0 0-1.5 1.5v8A1.5 1.5 0 0 0 6 21h12a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 18 10h-2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5m0 0-6 6m6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.6 3.5h-2a1.5 1.5 0 0 0-1.5 1.7A17 17 0 0 0 18.8 20.9a1.5 1.5 0 0 0 1.7-1.5v-2l-4-1.7-2 2a12 12 0 0 1-6.2-6.2l2-2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="m3.5 7 8.5 6.5L20.5 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 6.5h15M9.5 6.5V4.5h5v2m-8 0 1 13a1.5 1.5 0 0 0 1.5 1.5h6a1.5 1.5 0 0 0 1.5-1.5l1-13M10 10.5v6m4-6v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-restore" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4.5 9H14a6 6 0 0 1 0 12h-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-xmark" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14m0 0-6-6m6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="m15.5 5 3.5 3.5L8.5 19H5v-3.5ZM13.5 7l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15ZM10 20.5a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+      <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M4 4l16 16M2.5 9a14 14 0 0 1 4.2-2.7m3.3-.8A14 14 0 0 1 21.5 9M5.5 12.5a9.5 9.5 0 0 1 4-2.2m5 .1a9.5 9.5 0 0 1 4 2.1M9 16a4.5 4.5 0 0 1 6 0M12 19.5h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3c.6 4.3 2.7 6.4 7 7-4.3.6-6.4 2.7-7 7-.6-4.3-2.7-6.4-7-7 4.3-.6 6.4-2.7 7-7Z"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- Sign in: email, then the 6-digit code from the same email (the link only works in a browser). -->
+  <div id="auth" class="auth" hidden>
+    <img class="app-icon" src="./icons/icon-192.png" alt="" width="80" height="80" />
+    <form id="auth-email-form" novalidate>
+      <h1 class="t-large-title">House Hunter</h1>
+      <p>Sign in with your email. We'll send you a code — no password needed.</p>
+      <label class="visually-hidden" for="auth-email">Email</label>
+      <input class="field" type="email" id="auth-email" autocomplete="email" inputmode="email" placeholder="you@example.com" required />
+      <div class="error" id="auth-email-error" role="alert"></div>
+      <button class="btn btn-filled btn-wide" type="submit" id="auth-email-submit">Send Code</button>
+    </form>
+    <form id="auth-code-form" novalidate hidden>
+      <h1 class="t-large-title">Check your email</h1>
+      <p id="auth-code-hint">Enter the code we sent you.</p>
+      <label class="visually-hidden" for="auth-code">Sign-in code</label>
+      <input class="field code" type="text" id="auth-code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="••••••" required />
+      <div class="error" id="auth-code-error" role="alert"></div>
+      <button class="btn btn-filled btn-wide" type="submit" id="auth-code-submit">Sign In</button>
+      <button class="btn btn-plain btn-wide" type="button" id="auth-code-back">Use a different email</button>
+    </form>
+  </div>
+
+  <div id="app" hidden>
+    <main class="view" id="view-board" aria-labelledby="board-title"></main>
+    <main class="view" id="view-map" aria-labelledby="map-title" hidden></main>
+    <main class="view" id="view-places" aria-labelledby="places-title" hidden></main>
+    <main class="view" id="view-settings" aria-labelledby="settings-title" hidden></main>
+
+    <nav class="tabbar" aria-label="Sections">
+      <div class="tabbar-inner" role="tablist">
+        <a class="tab" href="#/board" data-tab="board" role="tab">
+          <svg class="off" aria-hidden="true"><use href="#i-board"/></svg><svg class="on" aria-hidden="true"><use href="#i-board-fill"/></svg>Board
+        </a>
+        <a class="tab" href="#/map" data-tab="map" role="tab">
+          <svg class="off" aria-hidden="true"><use href="#i-map"/></svg><svg class="on" aria-hidden="true"><use href="#i-map-fill"/></svg>Map
+        </a>
+        <a class="tab" href="#/places" data-tab="places" role="tab">
+          <svg class="off" aria-hidden="true"><use href="#i-pin"/></svg><svg class="on" aria-hidden="true"><use href="#i-pin-fill"/></svg>Places
+        </a>
+        <a class="tab" href="#/settings" data-tab="settings" role="tab">
+          <svg class="off" aria-hidden="true"><use href="#i-gear"/></svg><svg class="on" aria-hidden="true"><use href="#i-gear-fill"/></svg>Settings
+        </a>
+      </div>
+    </nav>
+  </div>
+
+  <div id="setup-needed" class="auth" hidden>
+    <h1 class="t-large-title">Almost there</h1>
+    <p>Add your Supabase project URL and anon key to <code>js/supabaseClient.js</code>.</p>
+  </div>
+
+  <div id="live-region" class="visually-hidden" aria-live="polite"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
