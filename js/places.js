@@ -3,7 +3,7 @@
 // Addresses are looked up on the server by travel-times, so a new place shows
 // "Finding it on the map…" for a few seconds, then updates live.
 import { esc, icon, placeKind, PLACE_KINDS } from "./format.js";
-import { store, subscribe, touch, placesSorted, upsertRow, deleteRow, usualMode } from "./store.js";
+import { store, subscribe, touch, placesSorted, upsertRow, deleteRow, usualMode, owners, ownerKey, ownerFields } from "./store.js";
 import { navBar, collapsingTitle, openSheet, openMenu, onLongPress, enableSwipeRows, swipeRow, toast, showError, confirmDestructive } from "./ui.js";
 
 let root, listEl;
@@ -38,9 +38,10 @@ export function initPlaces(el) {
   render();
 }
 
-export function ownerLabel(ownerId) {
-  if (!ownerId) return "Both of you";
-  return store.members.find((m) => m.user_id === ownerId)?.display_name ?? "Someone";
+// key: from ownerKey(place).
+export function ownerLabel(key) {
+  if (!key) return "Both of you";
+  return owners().find((o) => o.key === key)?.label ?? "Someone";
 }
 
 function statusLine(q) {
@@ -78,12 +79,12 @@ function render() {
   } else {
     const groups = new Map();
     for (const q of placesSorted()) {
-      const key = q.owner_id ?? "";
+      const key = ownerKey(q);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(q);
     }
     html = [...groups].map(([owner, list]) => `
-      <div class="group-header">${esc(ownerLabel(owner || null))}</div>
+      <div class="group-header">${esc(ownerLabel(owner))}</div>
       <div class="group">${list.map(rowHtml).join("")}</div>`).join("")
       + `<p class="group-footer">Times are for a weekday, arriving 8:30am. Turn on Show on Cards for the one or two places that matter most.</p>`;
   }
@@ -115,14 +116,14 @@ export function openPlace(id = null) {
   if (id && !q) return;
   const isNew = !q;
   let kind = q?.kind ?? "work";
-  let owner = q ? q.owner_id ?? "" : store.user?.id ?? "";
+  let owner = q ? ownerKey(q) : store.user?.id ?? "";
   let onCards = q?.show_on_cards ?? true;
   let onCardsTouched = !isNew;
-  let mode = q?.travel_mode ?? usualMode(owner || null);
+  let mode = q?.travel_mode ?? usualMode(owner);
   let modeTouched = !isNew;
   let sheetRef = null;
 
-  const owners = [...store.members.map((m) => ({ id: m.user_id, label: m.display_name })), { id: "", label: "Both" }];
+  const ownerChoices = owners();
 
   openSheet({
     title: isNew ? "New Place" : "Edit Place",
@@ -148,7 +149,7 @@ export function openPlace(id = null) {
           <div class="group-header" id="owner-label">Whose</div>
           <div style="padding:0 var(--gutter)">
             <div class="segmented wide" role="radiogroup" aria-labelledby="owner-label">
-              ${owners.map((o) => `<button type="button" role="radio" data-owner="${o.id}" aria-checked="${o.id === owner}">${esc(o.label)}</button>`).join("")}
+              ${ownerChoices.map((o) => `<button type="button" role="radio" data-owner="${esc(o.key)}" aria-checked="${o.key === owner}">${esc(o.label)}</button>`).join("")}
             </div>
           </div>
 
@@ -180,7 +181,7 @@ export function openPlace(id = null) {
       body.querySelectorAll("[data-owner]").forEach((b) => b.addEventListener("click", () => {
         owner = b.dataset.owner;
         body.querySelectorAll("[data-owner]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
-        if (!modeTouched) setMode(usualMode(owner || null));
+        if (!modeTouched) setMode(usualMode(owner));
       }));
       const setMode = (m) => {
         mode = m;
@@ -207,7 +208,7 @@ export function openPlace(id = null) {
       body.querySelector("#p-address").focus();
       return;
     }
-    const row = { name, kind, address, owner_id: owner || null, show_on_cards: onCards, travel_mode: mode };
+    const row = { name, kind, address, ...ownerFields(owner), show_on_cards: onCards, travel_mode: mode };
     sheetRef.setRightDisabled(true);
     try {
       const saved = await upsertRow("places", isNew ? row : { id, ...row });

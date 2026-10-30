@@ -124,3 +124,13 @@ Matthew drives and Hannah takes public transport, so each person has a `travel_m
 up), and each place has its own, starting from its owner's. Cards show each place's time the
 usual way, with a car or train glyph; the sheet lists the usual way first and dims the other.
 Both modes are still computed. Existing places owned by Matthew were switched to car.
+
+## Stage 2.2 — Places for someone who hasn't signed up yet (30 Oct 2026)
+
+Hannah hadn't created her account, so she wasn't in "Whose" and Matthew couldn't add her
+places. Places can now belong to an invite (`places.owner_invite`, the invite email, with a
+check that only one of `owner_id` / `owner_invite` is set). The sign-up trigger moves those
+places to the new account. In the app, owners are keyed as a user id, `invite:<email>` or
+"" (both); invitees use their invite's travel mode. Handover tested in a rolled-back
+transaction (insert into `auth.users` → place moved to the new user).
+

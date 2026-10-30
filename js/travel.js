@@ -2,7 +2,7 @@
 // cards. The numbers come from the travel-times Edge Function; either of you can
 // type in your own time for a place, which then wins over the calculated one.
 import { esc, icon, minutes, distance } from "./format.js";
-import { store, touch, travelFor, travelSeconds, upsertRow } from "./store.js";
+import { store, touch, travelFor, travelSeconds, upsertRow, ownerKey } from "./store.js";
 import { openMenu, toast, showError } from "./ui.js";
 import { ownerLabel } from "./places.js";
 import { supabase } from "./supabaseClient.js";
@@ -56,7 +56,7 @@ function placeRow(p, { place, transit, drive }) {
     : place.travel_mode === "drive" ? place.address : transit?.summary ?? place.address;
   const order = place.travel_mode === "drive" ? [["drive", drive], ["transit", transit]] : [["transit", transit], ["drive", drive]];
   return `<button class="row travel-row" data-travel="${place.id}">
-    <span class="row-label">${esc(place.name)} <span class="secondary">· ${esc(ownerLabel(place.owner_id).replace("Both of you", "Both"))}</span>
+    <span class="row-label">${esc(place.name)} <span class="secondary">· ${esc(ownerLabel(ownerKey(place)).replace("Both of you", "Both"))}</span>
       <span class="t-footnote secondary">${esc(sub)}</span></span>
     <span class="travel-times">${order.map(([mode, row], i) => timeHtml(row, mode, placeReady, i === 0)).join("")}</span>
   </button>`;
@@ -170,13 +170,14 @@ async function recalculate(p, button) {
 export function cardTravel(p) {
   if (p.stage === "rejected" || !located(p)) return { html: "", label: "" };
   const chosen = travelFor(p.id).filter((x) => x.place.show_on_cards).slice(0, 3);
-  const ownerCount = (id) => chosen.filter((x) => x.place.owner_id === id).length;
+  const ownerCount = (key) => chosen.filter((x) => ownerKey(x.place) === key).length;
   const parts = chosen.map(({ place, transit, drive }) => {
     const byCar = place.travel_mode === "drive";
     const row = byCar ? drive : transit;
     const secs = travelSeconds(row);
     if (secs == null) return null;
-    const who = place.owner_id && ownerCount(place.owner_id) === 1 ? ownerLabel(place.owner_id) : place.name;
+    const key = ownerKey(place);
+    const who = key && ownerCount(key) === 1 ? ownerLabel(key) : place.name;
     return { who, byCar, time: `${byCar && row.manual_s == null ? "~" : ""}${minutes(secs)}` };
   }).filter(Boolean);
   const stop = [...(p.nearest_stops ?? [])].sort((a, b) => a.walk_s - b.walk_s)[0];

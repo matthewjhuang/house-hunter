@@ -3,7 +3,7 @@
 // the listing. OpenStreetMap data from OpenFreeMap (free, no key) in its light and
 // dark styles, drawn by MapLibre, which loads the first time the tab opens.
 import { STAGES, esc, icon, money, title, stageLabel, placeKind } from "./format.js";
-import { store, subscribe, placesSorted } from "./store.js";
+import { store, subscribe, placesSorted, ownerKey } from "./store.js";
 import { openProperty } from "./propertySheet.js";
 import { ownerLabel } from "./places.js";
 import { located, cardTravel } from "./travel.js";
@@ -133,7 +133,7 @@ function placeMarker(q) {
     kind: "place",
     lngLat: [q.longitude, q.latitude],
     html: `<span class="place-pin" data-kind="${kind.id}">${icon(kind.icon)}</span>`,
-    label: `${q.name}, ${ownerLabel(q.owner_id)}`,
+    label: `${q.name}, ${ownerLabel(ownerKey(q))}`,
     z: 1
   };
 }

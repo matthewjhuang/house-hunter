@@ -179,17 +179,33 @@ export function changesFor(propertyId) {
   return [...state.changes.values()].filter((c) => c.property_id === propertyId).sort((a, b) => b.detected_at.localeCompare(a.detected_at));
 }
 
-// Places in display order: each person's (members' order), then both of yours.
-export function placesSorted() {
-  const owners = [...state.members.map((m) => m.user_id), null];
-  return [...state.places.values()].sort((a, b) =>
-    owners.indexOf(a.owner_id ?? null) - owners.indexOf(b.owner_id ?? null) || a.position - b.position);
+// Everyone a place can belong to: members, then anyone invited who hasn't created their
+// account yet (their places move over when they do), then both of you. Keys are a user
+// id, "invite:<email>", or "" for both. mode is how they usually get around.
+export function owners() {
+  const joined = new Set(state.members.map((m) => m.email));
+  return [
+    ...state.members.map((m) => ({ key: m.user_id, label: m.display_name, mode: m.travel_mode ?? "transit" })),
+    ...state.invites.filter((i) => !joined.has(i.email)).map((i) => ({ key: `invite:${i.email}`, label: i.display_name, mode: i.travel_mode ?? "transit" })),
+    { key: "", label: "Both", mode: "transit" }
+  ];
 }
 
-// How someone usually gets around: their own setting, or public transport for places
-// you share.
-export function usualMode(userId) {
-  return state.members.find((m) => m.user_id === userId)?.travel_mode ?? "transit";
+export const ownerKey = (q) => q.owner_id ?? (q.owner_invite ? `invite:${q.owner_invite}` : "");
+
+export function ownerFields(key) {
+  return key.startsWith("invite:") ? { owner_id: null, owner_invite: key.slice(7) } : { owner_id: key || null, owner_invite: null };
+}
+
+// Places in display order: grouped by owner, in owners() order.
+export function placesSorted() {
+  const order = owners().map((o) => o.key);
+  return [...state.places.values()].sort((a, b) =>
+    order.indexOf(ownerKey(a)) - order.indexOf(ownerKey(b)) || a.position - b.position);
+}
+
+export function usualMode(key) {
+  return owners().find((o) => o.key === key)?.mode ?? "transit";
 }
 
 // { place, transit, drive } for every place, transit/drive being travel_times rows.
