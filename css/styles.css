@@ -1109,11 +1109,11 @@ body.sheet-open .toast { bottom: calc(var(--safe-bottom) + 84px); }
 }
 .place-icon svg { width: 18px; height: 18px; }
 [data-kind="work"] { --kind: #0066d6; }
-[data-kind="study"] { --kind: #5856d6; }
 [data-kind="gym"] { --kind: #00829a; }
 [data-kind="shops"] { --kind: #1f7a35; }
 [data-kind="family"] { --kind: #b25000; }
-[data-kind="other"] { --kind: #6e6e73; }
+[data-kind="health"] { --kind: #c4314b; }
+[data-kind="general"] { --kind: #6e6e73; }
 [data-kind="train"] { --kind: #0072ce; }  /* PTV metro blue */
 [data-kind="tram"] { --kind: #4f8a10; }   /* PTV tram green, darkened for white */
 .place-name { display: block; }

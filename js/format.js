@@ -24,11 +24,11 @@ export const reasonLabel = (id) => REJECT_REASONS.find((r) => r.id === id)?.labe
 
 export const PLACE_KINDS = [
   { id: "work", label: "Work", icon: "briefcase" },
-  { id: "study", label: "Study", icon: "study" },
   { id: "gym", label: "Gym", icon: "gym" },
   { id: "shops", label: "Shops", icon: "cart" },
-  { id: "family", label: "Family", icon: "family" },
-  { id: "other", label: "Other", icon: "star" }
+  { id: "health", label: "Health", icon: "health" },
+  { id: "family", label: "Family + Friends", icon: "people" },
+  { id: "general", label: "General", icon: "star" }
 ];
 export const placeKind = (id) => PLACE_KINDS.find((k) => k.id === id) ?? PLACE_KINDS[PLACE_KINDS.length - 1];
 

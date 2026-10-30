@@ -229,8 +229,8 @@ Share menu lists House Hunter once it's installed (`share_target` in the manifes
 
 ## Places, travel times and the map
 
-- **Places tab.** Each of you adds the places you go every week (work, study, the gym,
-  family), each one yours, Hannah's or both of yours, and set how you usually get there:
+- **Places tab.** Each of you adds the places you go every week, tagged Work, Gym, Shops,
+  Health (doctors, dentist, hospital), Family + Friends or General, each one yours, Hannah's or both of yours, and set how you usually get there:
   car or public transport. New places start with their owner's way (Matthew drives, Hannah
   takes public transport, shared places use public transport). Turn on **Show on Cards** for
   the one or two that matter most. Either of you can add the other's places, even before

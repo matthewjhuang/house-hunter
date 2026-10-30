@@ -46,7 +46,7 @@ export function demoData() {
     { id: "q1", household_id: "h1", owner_id: me, name: "Work", kind: "work", address: "101 Collins St, Melbourne", travel_mode: "drive", show_on_cards: true, latitude: -37.81489, longitude: 144.97064, geocode_status: "ok", position: 1 },
     { id: "q2", household_id: "h1", owner_id: me, name: "Gym", kind: "gym", address: "Fitness First, 380 Sydney Rd, Brunswick", travel_mode: "drive", show_on_cards: false, latitude: -37.76881, longitude: 144.96126, geocode_status: "ok", position: 2 },
     { id: "q3", household_id: "h1", owner_id: partner, name: "Work", kind: "work", address: "Box Hill Hospital", travel_mode: "transit", show_on_cards: true, latitude: -37.81361, longitude: 145.11841, geocode_status: "ok", position: 3 },
-    { id: "q4", household_id: "h1", owner_id: partner, name: "Uni", kind: "study", address: "Main campus", travel_mode: "transit", show_on_cards: false, latitude: null, longitude: null, geocode_status: "not_found", position: 4 },
+    { id: "q4", household_id: "h1", owner_id: partner, name: "GP", kind: "health", address: "Medical centre", travel_mode: "transit", show_on_cards: false, latitude: null, longitude: null, geocode_status: "not_found", position: 4 },
     { id: "q5", household_id: "h1", owner_id: null, name: "Groceries", kind: "shops", address: "Coles, Barkly Square, Brunswick", travel_mode: "transit", show_on_cards: false, latitude: -37.77275, longitude: 144.96063, geocode_status: "ok", position: 5 },
     { id: "q6", household_id: "h1", owner_id: null, name: "Mum and Dad", kind: "family", address: "Ivanhoe", travel_mode: "transit", show_on_cards: false, latitude: -37.76889, longitude: 145.04500, geocode_status: "approximate", position: 6 }
   ];

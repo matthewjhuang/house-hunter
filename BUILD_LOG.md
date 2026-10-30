@@ -134,3 +134,9 @@ places to the new account. In the app, owners are keyed as a user id, `invite:<e
 "" (both); invitees use their invite's travel mode. Handover tested in a rolled-back
 transaction (insert into `auth.users` → place moved to the new user).
 
+## Stage 2.3 — Place tags (30 Oct 2026)
+
+Tags are now Work, Gym, Shops, Health, Family + Friends and General: Study is gone and
+General replaces Other. The enum was rebuilt (any study/other rows would have become
+general; none existed). Show on Cards now defaults on for Work only.
+

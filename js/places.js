@@ -1,5 +1,5 @@
-// Places tab: the places each of you goes to every week (work, study, the gym,
-// family). Every active listing gets public transport and car times to each one.
+// Places tab: the places each of you goes to every week (work, the gym, the doctor,
+// family and friends). Every active listing gets public transport and car times to each one.
 // Addresses are looked up on the server by travel-times, so a new place shows
 // "Finding it on the map…" for a few seconds, then updates live.
 import { esc, icon, placeKind, PLACE_KINDS } from "./format.js";
@@ -73,7 +73,7 @@ function render() {
   } else if (!store.places.size) {
     html = `<div class="empty" style="padding-top:10vh">${icon("pin")}
       <h2 class="t-title3">Add the places you go every week</h2>
-      <p>Work, study, the gym, family. Every listing then shows how long it takes to get there by public transport and by car.</p>
+      <p>Work, the gym, the doctor, family and friends. Every listing then shows how long it takes to get there by public transport and by car.</p>
       <button class="btn btn-filled" id="first-place">${icon("plus")}Add a Place</button>
     </div>`;
   } else {
@@ -175,8 +175,8 @@ export function openPlace(id = null) {
         kind = chip.dataset.kind;
         body.querySelectorAll("[data-kind]").forEach((c) => c.setAttribute("aria-pressed", String(c === chip)));
         body.querySelector("#p-name").placeholder = placeKind(kind).label;
-        // Work and study are what you'd want on the cards; the rest usually aren't.
-        if (!onCardsTouched) body.querySelector("#p-cards").checked = onCards = kind === "work" || kind === "study";
+        // Work is what you'd want on the cards; the rest usually isn't.
+        if (!onCardsTouched) body.querySelector("#p-cards").checked = onCards = kind === "work";
       }));
       body.querySelectorAll("[data-owner]").forEach((b) => b.addEventListener("click", () => {
         owner = b.dataset.owner;

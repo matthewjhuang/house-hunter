@@ -1,6 +1,6 @@
 // App shell cache plus Web Push. Bump CACHE_NAME with every release that changes
 // any file below, so phones pick up the new version.
-const CACHE_NAME = "househunter-shell-v12";
+const CACHE_NAME = "househunter-shell-v13";
 
 const SHELL_FILES = [
   "./",
