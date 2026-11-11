@@ -2,7 +2,8 @@
 //
 // For every active property (anything not Rejected) and every place on the Places
 // tab, works out a weekday trip arriving 8:30am by public transport and by car, and
-// finds each property's nearest train station and tram stop with the walk to it.
+// finds each property's nearest train station and tram stop with the walk to it, and
+// its closest Coles, Woolworths, Aldi, Chemist Warehouse and park ("Nearby").
 // Properties and places without coordinates are geocoded first.
 //
 // All free, no keys:
@@ -12,6 +13,8 @@
 //   - OSRM (routing.openstreetmap.de) for car and walking times. It has no traffic,
 //     so car times are multiplied by PEAK_FACTOR as a rush-hour allowance
 //   - Transitous again for nearby stations and tram stops (PTV stop list)
+//   - nearby/nearby.json in the GitHub repo for stores and parks (OpenStreetMap,
+//     rebuilt monthly by a GitHub Action), so they take no Supabase storage
 //
 // Called three ways (deployed with verify_jwt off; it checks callers itself):
 //   - Database triggers, with x-cron-secret, when a property or place is added or its
@@ -29,6 +32,9 @@ const UA = "HouseHunter/1.0 (https://matthewjhuang.github.io/house-hunter/)";
 const TZ = "Australia/Melbourne";
 const PEAK_FACTOR = 1.6;
 const STALE_DAYS = 28;
+// Short local drives, mostly outside peak hour, so a smaller allowance than commutes.
+const LOCAL_FACTOR = 1.3;
+const NEARBY_URL = "https://raw.githubusercontent.com/matthewjhuang/house-hunter/main/nearby/nearby.json";
 // Leaves headroom under the Edge Function wall-clock limit.
 const TIME_BUDGET_MS = 110_000;
 
@@ -44,6 +50,7 @@ interface Property {
   longitude: number | null;
   geocode_status: string | null;
   nearest_stops: unknown[] | null;
+  nearby: { version?: string } | null;
 }
 
 interface Place {
@@ -66,7 +73,7 @@ interface TravelRow {
 
 type Point = { lat: number; lng: number };
 
-const PROPERTY_COLUMNS = "id, household_id, stage, address, suburb, state, postcode, latitude, longitude, geocode_status, nearest_stops";
+const PROPERTY_COLUMNS = "id, household_id, stage, address, suburb, state, postcode, latitude, longitude, geocode_status, nearest_stops, nearby";
 const PLACE_COLUMNS = "id, household_id, address, latitude, longitude, geocode_status";
 
 let deadline = 0;
@@ -173,15 +180,28 @@ async function transit(from: Point, to: Point, time: string) {
   return { status: "ok", duration_s: Math.round(best.duration), summary };
 }
 
+let lastOsrm = 0;
+
 // OSRM table: durations (s) and distances (m) from each source to each destination.
-async function osrmTable(profile: "car" | "foot", sources: Point[], destinations: Point[]) {
+// The FOSSGIS server answers bursts with 429, so calls are spaced out and retried once.
+async function osrmTable(profile: "car" | "foot", sources: Point[], destinations: Point[], retry = true): Promise<{ durations: (number | null)[][]; distances: (number | null)[][] }> {
+  const wait = lastOsrm + 1100 - Date.now();
+  lastOsrm = Math.max(Date.now(), lastOsrm + 1100);
+  if (wait > 0) await sleep(wait);
   const coords = [...sources, ...destinations].map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(";");
   const params = new URLSearchParams({
     sources: sources.map((_, i) => i).join(";"),
     destinations: destinations.map((_, i) => i + sources.length).join(";"),
     annotations: "duration,distance"
   });
-  const d = await getJson(`https://routing.openstreetmap.de/routed-${profile}/table/v1/${profile === "car" ? "driving" : "foot"}/${coords}?${params}`);
+  let d;
+  try {
+    d = await getJson(`https://routing.openstreetmap.de/routed-${profile}/table/v1/${profile === "car" ? "driving" : "foot"}/${coords}?${params}`);
+  } catch (err) {
+    if (!retry || !/ 429$/.test((err as Error).message)) throw err;
+    await sleep(5000);
+    return osrmTable(profile, sources, destinations, false);
+  }
   if (d.code !== "Ok") throw new Error(`OSRM ${d.code}`);
   return { durations: d.durations as (number | null)[][], distances: d.distances as (number | null)[][] };
 }
@@ -247,6 +267,81 @@ async function fillStops(admin: SupabaseClient, p: Property, at: Point) {
     await admin.from("properties").update({ nearest_stops: stops }).eq("id", p.id);
   } catch (err) {
     console.error("nearest stops failed", p.id, (err as Error).message);
+  }
+}
+
+// ---------------------------------------------------------------- nearby
+
+interface NearbyData {
+  updated: string;
+  stores: Record<string, [number, number, string][]>;
+  parks: [string, number, [number, number][]][];
+}
+
+const STORE_KINDS = ["coles", "woolworths", "aldi", "chemist_warehouse"];
+let nearbyData: NearbyData | null = null;
+
+async function nearbyFile() {
+  nearbyData ??= await getJson(NEARBY_URL) as NearbyData;
+  return nearbyData;
+}
+
+// The closest store of each brand and the closest park, by walking time. Candidates are
+// the nearest few by straight line (for parks, by distance to their edge); OSRM then
+// gives real walk and drive times to each.
+async function nearby(at: Point) {
+  const data = await nearbyFile();
+  const candidates: { kind: string; name: string; to: Point; ha?: number }[] = [];
+  for (const kind of STORE_KINDS) {
+    (data.stores[kind] ?? [])
+      .map(([lat, lng, name]) => ({ kind, name, to: { lat, lng }, d: metres(at, { lat, lng }) }))
+      .filter((c) => c.d < 15_000)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 3)
+      .forEach((c) => candidates.push(c));
+  }
+  data.parks
+    .map(([name, ha, outline]) => {
+      const edge = outline.map(([lat, lng]) => ({ lat, lng })).reduce((best, pt) => (metres(at, pt) < metres(at, best) ? pt : best));
+      return { kind: "park", name, ha, to: edge, d: metres(at, edge) };
+    })
+    .filter((c) => c.d < 5_000)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 3)
+    .forEach((c) => candidates.push(c));
+  if (!candidates.length) return [];
+
+  const dests = candidates.map((c) => c.to);
+  const foot = await osrmTable("foot", [at], dests);
+  const car = await osrmTable("car", [at], dests);
+  const items = [];
+  for (const kind of [...STORE_KINDS, "park"]) {
+    let best = -1;
+    candidates.forEach((c, i) => {
+      if (c.kind !== kind || foot.durations[0][i] == null) return;
+      if (best < 0 || foot.durations[0][i]! < foot.durations[0][best]!) best = i;
+    });
+    if (best < 0) continue;
+    const c = candidates[best];
+    items.push({
+      kind, name: c.name, lat: c.to.lat, lon: c.to.lng,
+      distance_m: Math.round(foot.distances[0][best] ?? metres(at, c.to)),
+      walk_s: Math.round(foot.durations[0][best]!),
+      drive_s: car.durations[0][best] == null ? null : Math.round(car.durations[0][best]! * LOCAL_FACTOR),
+      ...(c.ha ? { ha: c.ha } : {})
+    });
+  }
+  return items;
+}
+
+async function fillNearby(admin: SupabaseClient, p: Property, at: Point) {
+  try {
+    const { updated } = await nearbyFile();
+    if (p.nearby?.version === updated) return;
+    const items = await nearby(at);
+    await admin.from("properties").update({ nearby: { version: updated, items } }).eq("id", p.id);
+  } catch (err) {
+    console.error("nearby failed", p.id, (err as Error).message);
   }
 }
 
@@ -338,8 +433,9 @@ async function runProperty(admin: SupabaseClient, id: string, force: boolean) {
   if (!p || p.stage === "rejected") return { skipped: "not an active property" };
   const from = await locateProperty(admin, p, force);
   if (!from) return { geocode: p.geocode_status ?? "no address" };
-  if (force) p.nearest_stops = null;
+  if (force) Object.assign(p, { nearest_stops: null, nearby: null });
   await fillStops(admin, p, from);
+  await fillNearby(admin, p, from);
   const places = await placesWithPoints(admin, p.household_id);
   const computed = await computePairs(admin, places.map(({ q, to }) => ({ p, from, q, to })), force);
   return { computed };
@@ -374,6 +470,7 @@ async function backfill(admin: SupabaseClient) {
       const from = await locateProperty(admin, p);
       if (!from) continue;
       await fillStops(admin, p, from);
+      await fillNearby(admin, p, from);
       for (const { q, to } of places) pairs.push({ p, from, q, to });
     }
     computed += await computePairs(admin, pairs);
