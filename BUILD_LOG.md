@@ -174,3 +174,25 @@ markers open a MapLibre popup styled as an iOS card: what it is, the walk (or fo
 its usual-mode time first, then the other, from the selected listing), and a Google Maps
 directions link. Selecting another listing closes any open card.
 
+## Stage 2.6 — Every line nearby, with frequency and last service (12 Nov 2026)
+
+"Nearest tram stop" hid most of what matters: at Cobden St, Kew it showed one stop, while
+within a short walk there are trams 48, 109 and 16 and buses 200 and 207. Now `travel-times`
+lists lines, not stops (`properties.transit`, ~0.9 KB per listing; `nearest_stops` dropped).
+
+**How.** Transitous' stop list for a 2 km box, then its stop-times API for each of the
+closest ~45 kerbside stops plus every station: departures 7:30–8:30am next Wednesday
+(frequency) and the last ones before 3am that night. Trams and buses are grouped by route,
+trains by station (all its lines). Each direction comes from its own closest stop, since the
+two sides of a road are separate stops with different names; "city" is whichever direction's
+terminus is nearer Flinders Street, and "last home" is the last departure the other way.
+Buses must run at least 4 an hour at 8am; walking limits are trains 25 min, trams 15, buses
+10. Refreshed every four weeks.
+
+**Found while checking it on the real listings.** Querying one stop per name lost a
+direction. A narrower walk limit hid tram 16 and the buses at Cobden St. Glenferrie had
+replacement buses after 11:30pm on the sampled Wednesday (works), which made the last train
+look like 11:23pm, so replacement buses at a station now count as the train. A 50-stop cap
+let tram and bus stops crowd out Kooyong Station, so all stations in range are always
+included.
+

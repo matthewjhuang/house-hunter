@@ -235,9 +235,16 @@ Share menu lists House Hunter once it's installed (`share_target` in the manifes
   takes public transport, shared places use public transport). Turn on **Show on Cards** for
   the one or two that matter most. Either of you can add the other's places, even before
   they've created their account: they move to that account when the person signs up.
-- **Getting around** on every listing that isn't Rejected: the nearest train station and tram
-  stop with the walk to each, then public transport and car times to every place, for a
-  weekday trip arriving 8:30am. Tap a place to get directions in Google Maps or type in your
+- **Public transport** on every listing that isn't Rejected: every train station (within a
+  25-minute walk), tram route (15 min) and bus route (10 min, only if it runs at least every
+  15 minutes at 8am), each at its closest stop. Each line shows how often it runs to the city
+  7:30–8:30am on a weekday, a **Frequent** tag if that's every 10 minutes or better, and the
+  last service home on a weeknight (the last one heading away from the city past your stop,
+  replacement buses included). Tap a line for both directions. Cards sum it up, for example
+  "Glenferrie 15 min · trams 70 · 75 · 16 · 2 buses", and on the map each stop is a marker
+  you can tap for its lines.
+- **Getting around**: public transport and car times to every place, for a weekday trip
+  arriving 8:30am. Tap a place to get directions in Google Maps or type in your
   own time (yours always wins and is never overwritten). Each place's usual way is listed
   first. Cards show the time to the Show on Cards places the usual way (e.g. "Matthew
   ~18 min" by car, "Hannah 57 min" by train) and the walk to the nearest stop.
@@ -252,8 +259,8 @@ Share menu lists House Hunter once it's installed (`share_target` in the manifes
   Warehouse and park (named, at least 1 hectare), each with the walk and, past a 10-minute
   walk, the drive. Small stores show their real name ("Coles Local", "Woolworths Metro").
   Tap one for walking directions. Cards show the closest supermarket and the park.
-- **On the map**, tapping a listing zooms to it and shows its nearest station, tram stop,
-  shops and park as small round markers. Tap any of those, or one of your places, for a
+- **On the map**, tapping a listing zooms to it and shows its stations and stops, shops and
+  park as small round markers. Tap any of those, or one of your places, for a
   card with the walk (or, for places, the times from that listing) and directions.
 
 **No keys, no billing.** Everything is free, open data:
