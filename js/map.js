@@ -1,6 +1,6 @@
 // Map tab: every listing that isn't Rejected as a price pin in its stage colour, and
-// your places as square markers. Tap a pin for a preview, plus its nearest station,
-// tram stop, shops and park as small round markers; tap the preview to open the
+// your places as square markers. Tap a pin for a preview, plus the stations and stops
+// it's near and its closest shops and park as small round markers; tap the preview to open the
 // listing. Tap a place or a small marker for its details and directions.
 // OpenStreetMap data from OpenFreeMap (free, no key) in its light and dark styles,
 // drawn by MapLibre, which loads the first time the tab opens.
@@ -8,7 +8,7 @@ import { STAGES, NEARBY_KINDS, esc, icon, money, minutes, title, stageLabel, pla
 import { store, subscribe, placesSorted, ownerKey, travelFor, travelSeconds } from "./store.js";
 import { openProperty } from "./propertySheet.js";
 import { ownerLabel } from "./places.js";
-import { located, cardTravel, stopName, nearbyDirections, directionsUrl } from "./travel.js";
+import { located, cardTravel, nearbyDirections, directionsUrl, lineSummary, lineBadge, stopLabel, linesFor } from "./travel.js";
 
 const MAPLIBRE = "https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/";
 const STYLES = {
@@ -157,16 +157,22 @@ function render() {
       if (q.latitude != null && q.geocode_status !== "not_found") wanted.set(q.id, placeMarker(q));
     }
   }
-  // The selected listing's nearest station and tram stop, closest shops and park.
+  // The selected listing's stations and stops (one marker per stop, however many lines
+  // call there), closest shops and park.
   const sp = selected && store.properties.get(selected);
-  for (const s of (sp && sp.nearest_stops) || []) {
-    if (s.lat == null) continue;
-    wanted.set(`stop:${s.kind}`, {
+  const byStop = new Map();
+  for (const line of sp ? linesFor(sp) : []) {
+    const key = `stop:${line.stop.name}`;
+    byStop.set(key, [...(byStop.get(key) ?? []), line]);
+  }
+  for (const [key, lines] of byStop) {
+    const main = lines[0]; // trains sort first, then trams, then buses
+    wanted.set(key, {
       kind: "nearby",
-      lngLat: [s.lon, s.lat],
-      html: `<span class="nearby-pin" data-kind="${s.kind}">${icon(s.kind)}</span>`,
-      label: `${stopName(s)}, ${minutes(s.walk_s)} walk`,
-      info: () => stopInfo(sp, s),
+      lngLat: [main.stop.lon, main.stop.lat],
+      html: `<span class="nearby-pin" data-kind="${main.mode}">${icon(main.mode)}</span>`,
+      label: `${stopLabel(main)}, ${minutes(main.walk_s)} walk`,
+      info: () => stopInfo(sp, lines),
       z: 0
     });
   }
@@ -198,7 +204,14 @@ function render() {
         el.addEventListener("click", (e) => {
           e.stopPropagation();
           const info = markers.get(id)?.info;
-          if (info) popup.setLngLat(markers.get(id).marker.getLngLat()).setHTML(info()).addTo(map);
+          if (!info) return;
+          const lngLat = markers.get(id).marker.getLngLat();
+          popup.setLngLat(lngLat).setHTML(info()).addTo(map);
+          // Near an edge the card would be cut off, so bring the marker in first.
+          const pt = map.project(lngLat);
+          if (pt.x < 150 || pt.x > canvas.clientWidth - 150 || pt.y < 260) {
+            map.easeTo({ center: lngLat, offset: [0, 110], duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 300 });
+          }
         });
       }
       const marker = new ml.Marker({ element: el, anchor: w.kind === "property" ? "bottom" : "center" }).setLngLat(w.lngLat).addTo(map);
@@ -303,12 +316,21 @@ function infoCard({ kind, glyph, title, sub, lines, link, linkLabel }) {
 const from = (p) => `<span class="secondary">From ${esc(title(p))}</span>`;
 const walkLine = (walk_s, metres) => `${icon("walk")}${minutes(walk_s)} walk${metres ? ` · ${metres < 1000 ? `${Math.round(metres / 10) * 10} m` : `${(metres / 1000).toFixed(1)} km`}` : ""}`;
 
-function stopInfo(p, s) {
+// A station or stop, and every line from it that made the list.
+function stopInfo(p, lines) {
+  const main = lines[0];
+  const kinds = [...new Set(lines.map((l) => l.mode))].map((m) => ({ train: "Train station", tram: "Tram stop", bus: "Bus stop" })[m]);
   return infoCard({
-    kind: s.kind, glyph: s.kind, title: stopName(s),
-    sub: s.kind === "train" ? "Train station" : `Tram stop${s.stop_no ? ` ${s.stop_no}` : ""}`,
-    lines: [walkLine(s.walk_s, s.distance_m), from(p)],
-    link: nearbyDirections(p, s), linkLabel: "Walking directions"
+    kind: main.mode, glyph: main.mode, title: stopLabel(main),
+    sub: `${kinds.join(" and ")}${main.stop.no ? ` ${main.stop.no}` : ""}`,
+    lines: [
+      ...lines.map((l) => {
+        const { freq, last } = lineSummary(l);
+        return `<span class="info-transit">${lineBadge(l)}<span>${l.mode === "train" ? `${esc(l.route)}<br>` : ""}${esc(freq)}${last ? `<br><span class="secondary">${esc(last)}</span>` : ""}</span></span>`;
+      }),
+      walkLine(main.walk_s, main.distance_m), from(p)
+    ],
+    link: nearbyDirections(p, { lat: main.stop.lat, lon: main.stop.lon }), linkLabel: "Walking directions"
   });
 }
 

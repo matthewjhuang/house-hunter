@@ -1464,3 +1464,34 @@ body.map-tab { overflow: hidden; }
 }
 .map-info .info-link svg { width: 12px; height: 12px; }
 .map-marker.nearby, .map-marker.place { cursor: pointer; }
+
+/* Public transport lines: a badge in PTV's colour for each mode, with the route. */
+[data-mode="train"], [data-kind="train"] { --mode: #0072ce; }
+[data-mode="tram"], [data-kind="tram"] { --mode: #4f8a10; }
+[data-mode="bus"], [data-kind="bus"] { --mode: #c4561b; }
+[data-kind="bus"] { --kind: #c4561b; }
+.line-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--mode);
+  color: #fff;
+  font-size: 0.824rem;
+  font-variant-numeric: tabular-nums;
+}
+.line-badge svg { width: 17px; height: 17px; }
+.line-badge b { font-weight: 700; }
+.transit-row { align-items: flex-start; }
+.transit-row .line-badge { margin-top: 2px; }
+.transit-row .row-label > .t-footnote { display: block; }
+.transit-row .line-dir { margin-top: 2px; }
+.map-info .info-transit { display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 4px; }
+.map-info .info-transit .line-badge { height: 26px; min-width: 26px; }
+.map-info .info-transit svg { color: #fff; }
+.maplibregl-popup.map-info { z-index: 10; }

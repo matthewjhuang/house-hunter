@@ -13,7 +13,7 @@ import { openSheet, openMenu, toast, showError, confirmDestructive, onLongPress,
 import { moveMenuItems, rejectFlow, restore, deleteFlow, setBooked } from "./actions.js";
 import { openEdit } from "./editSheet.js";
 import { supabase } from "./supabaseClient.js";
-import { travelSection, nearbySection, onTravelClick, onTravelSubmit } from "./travel.js";
+import { transitSection, travelSection, nearbySection, onTravelClick, onTravelSubmit } from "./travel.js";
 
 let openId = null;
 let unsubscribe = null;
@@ -52,7 +52,7 @@ export function openProperty(id, { highlightMissing = false, from = location.has
   });
 }
 
-const SECTIONS = ["gallery", "head", "notices", "inspections", "travel", "nearby", "details", "agent", "links", "description", "checklist", "comments", "danger"];
+const SECTIONS = ["gallery", "head", "notices", "inspections", "transit", "travel", "nearby", "details", "agent", "links", "description", "checklist", "comments", "danger"];
 
 function setup(id, body, sheet, highlightMissing) {
   openId = id;
@@ -199,6 +199,7 @@ const RENDER = {
       <p class="group-footer">Book a time to get a reminder ${esc(reminderText())} before it starts.</p>`;
   },
 
+  transit: transitSection,
   travel: travelSection,
   nearby: nearbySection,
 

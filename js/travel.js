@@ -1,5 +1,5 @@
-// Travel times on the property sheet ("Getting around") and the short line on board
-// cards. The numbers come from the travel-times Edge Function; either of you can
+// Public transport lines, travel times to your places ("Getting around") and Nearby on
+// the property sheet, and the short lines on board cards. The numbers come from the travel-times Edge Function; either of you can
 // type in your own time for a place, which then wins over the calculated one.
 import { esc, icon, minutes, distance, NEARBY_KINDS, SUPERMARKETS } from "./format.js";
 import { store, touch, travelFor, travelSeconds, upsertRow, ownerKey } from "./store.js";
@@ -12,17 +12,86 @@ let editing = null; // { propertyId, placeId, mode } while typing your own time
 
 export const located = (p) => p.latitude != null && p.longitude != null && (p.geocode_status == null || p.geocode_status === "ok");
 
-export function stopName(s) {
-  return s.kind === "train" ? `${s.name} Station` : s.name;
+// ---------------------------------------------------------------- public transport
+
+const MODE_NAME = { train: "Train", tram: "Tram", bus: "Bus" };
+const expanded = new Set(); // "propertyId:index" of lines showing both directions
+
+// "every 4 min", "every 20 min", "hourly"
+export function every(perHour) {
+  if (!perHour) return "not in the morning peak";
+  if (perHour < 1.5) return "hourly";
+  return `every ${Math.round(60 / perHour)} min`;
 }
 
-function stopRow(s) {
-  const what = s.kind === "train" ? "Train station" : `Tram stop${s.stop_no ? ` ${s.stop_no}` : ""}`;
-  return `<div class="row">
-    <span class="place-icon" data-kind="${s.kind}">${icon(s.kind)}</span>
-    <span class="row-label">${esc(stopName(s))}<span class="t-footnote secondary">${what} · ${distance(s.distance_m)}</span></span>
-    <span class="row-value travel-walk">${icon("walk")}${minutes(s.walk_s)}<span class="visually-hidden"> walk</span></span>
-  </div>`;
+export function clock(iso) {
+  return new Date(iso).toLocaleTimeString("en-AU", { timeZone: "Australia/Melbourne", hour: "numeric", minute: "2-digit" }).replace(" ", "").toLowerCase();
+}
+
+// The lines worth showing: a station is dropped when a closer one already has all its
+// lines (Auburn and Hawthorn behind Glenferrie).
+export function linesFor(p) {
+  const lines = p.transit?.lines ?? [];
+  const kept = [];
+  for (const l of lines) {
+    if (l.mode === "train") {
+      const mine = l.route.split(" · ");
+      if (kept.some((k) => k.mode === "train" && mine.every((r) => k.route.split(" · ").includes(r)))) continue;
+    }
+    kept.push(l);
+  }
+  return kept;
+}
+
+export const stopLabel = (line) => (line.mode === "train" ? `${line.stop.name} Station` : line.stop.name);
+
+// The two numbers that matter: how often it heads to the city at 8am, and the last
+// one coming back the other way at night (roughly when the last one gets you home).
+// Lines that don't run to or from the city use their busiest direction instead.
+export function lineSummary(line) {
+  const toCity = line.dirs.find((d) => d.city);
+  const back = toCity ? line.dirs.find((d) => !d.city) : null;
+  const busiest = toCity ?? [...line.dirs].sort((a, b) => b.peak - a.peak)[0];
+  const lastIso = back ? back.last : line.dirs.map((d) => d.last).filter(Boolean).sort().pop();
+  return {
+    freq: busiest ? `${every(busiest.peak)} ${toCity ? "to the city" : `to ${busiest.to}`}` : "",
+    frequent: (busiest?.peak ?? 0) >= 6,
+    last: lastIso ? `last ${back ? "home " : ""}${clock(lastIso)}` : ""
+  };
+}
+
+export function lineBadge(line) {
+  return `<span class="line-badge" data-mode="${line.mode}">${icon(line.mode)}${line.mode === "train" ? "" : `<b>${esc(line.route)}</b>`}</span>`;
+}
+
+function lineRow(p, line, i) {
+  const { freq, frequent, last } = lineSummary(line);
+  const open = expanded.has(`${p.id}:${i}`);
+  const title = line.mode === "train" ? stopLabel(line) : `${MODE_NAME[line.mode]} ${line.route}`;
+  const where = line.mode === "train" ? `${line.route} line${line.route.includes("·") ? "s" : ""}` : `${line.stop.name}${line.stop.no ? ` · stop ${line.stop.no}` : ""}`;
+  return `<button class="row transit-row" data-line="${i}" aria-expanded="${open}">
+    ${lineBadge(line)}
+    <span class="row-label">${esc(title)}${frequent ? ` <span class="tag">Frequent</span>` : ""}
+      <span class="t-footnote secondary">${esc(where)}</span>
+      ${freq ? `<span class="t-footnote">${esc(freq[0].toUpperCase() + freq.slice(1))}</span>` : ""}
+      ${last ? `<span class="t-footnote secondary">${esc(last[0].toUpperCase() + last.slice(1))}</span>` : ""}
+      ${open ? line.dirs.map((d) => `<span class="t-footnote secondary line-dir">To ${esc(d.to)}: ${esc(every(d.peak))} at 8am${d.last ? ` · last ${esc(clock(d.last))}` : ""}</span>`).join("") : ""}
+    </span>
+    <span class="travel-times"><span>${icon("walk")}<span class="visually-hidden">Walk: </span>${minutes(line.walk_s)}</span><span class="secondary">${distance(line.distance_m)}</span></span>
+  </button>`;
+}
+
+// Every train station, tram route and frequent bus route within walking distance.
+export function transitSection(p) {
+  if (p.stage === "rejected" || !located(p)) return "";
+  const header = `<div class="group-header">Public transport</div>`;
+  if (!p.transit) {
+    return `${header}<div class="group"><div class="progress-row"><span class="spinner" aria-hidden="true"></span>Finding the trains, trams and buses nearby…</div></div>`;
+  }
+  const lines = linesFor(p);
+  if (!lines.length) return `${header}<div class="group"><div class="row"><span class="row-label secondary">No train, tram or frequent bus within walking distance.</span></div></div>`;
+  return `${header}<div class="group">${lines.map((l, i) => lineRow(p, l, i)).join("")}</div>
+    <p class="group-footer">Trains within a 25-minute walk, trams 15, buses 10 if they run at least every 15 min. Frequency is for 7:30–8:30am on a weekday; last services are for a weeknight. Tap a line for both directions.</p>`;
 }
 
 // The place's usual mode comes first and in full colour; the other sits under it, dimmed.
@@ -74,12 +143,8 @@ export function travelSection(p) {
     if (!p.address) return "";
     return `${header}<div class="group"><div class="progress-row"><span class="spinner" aria-hidden="true"></span>Finding it on the map…</div></div>`;
   }
-  const stops = p.nearest_stops ?? [];
   const list = travelFor(p.id);
-  const rows = [
-    ...stops.map(stopRow),
-    ...list.map((x) => placeRow(p, x))
-  ];
+  const rows = list.map((x) => placeRow(p, x));
   if (!list.length) rows.push(`<a class="row" href="#/places">${icon("pin")}<span class="row-label">Add your places to see travel times</span>${icon("chevron", "icon chevron")}</a>`);
   return `${header}<div class="group">${rows.join("")}</div>
     <p class="group-footer">Weekday, arriving 8:30am. Car times are estimates with a rush-hour allowance. Tap a place to set your own time or get directions.
@@ -135,6 +200,12 @@ export function directionsUrl(p, place, mode) {
 
 // Returns true when the click was one of ours.
 export function onTravelClick(t, p, body) {
+  if (t.dataset.line) {
+    const key = `${p.id}:${t.dataset.line}`;
+    if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
+    touch();
+    return true;
+  }
   if (t.dataset.act === "cancel-time") {
     editing = null;
     touch();
@@ -208,7 +279,8 @@ async function recalculate(p, button) {
 
 // Times to the places marked Show on Cards, each the way that place is usually reached
 // and labelled by whose it is ("Matthew ~18 min" by car, "Hannah 58 min" by train),
-// plus the walk to the nearest stop, supermarket and park.
+// plus the trams, trains and buses nearby, and the walk to the closest supermarket
+// and park.
 export function cardTravel(p) {
   if (p.stage === "rejected" || !located(p)) return { html: "", label: "" };
   const chosen = travelFor(p.id).filter((x) => x.place.show_on_cards).slice(0, 3);
@@ -223,20 +295,27 @@ export function cardTravel(p) {
     return { who, byCar, time: `${byCar && row.manual_s == null ? "~" : ""}${minutes(secs)}` };
   }).filter(Boolean);
   const closest = (list) => [...list].sort((a, b) => a.walk_s - b.walk_s)[0];
-  const stop = closest(p.nearest_stops ?? []);
+  const lines = linesFor(p);
+  const trams = lines.filter((l) => l.mode === "tram").map((l) => l.route);
+  const station = lines.find((l) => l.mode === "train");
+  const buses = lines.filter((l) => l.mode === "bus").length;
   const items = p.nearby?.items ?? [];
   const shop = closest(items.filter((x) => SUPERMARKETS.includes(x.kind)));
   const park = items.find((x) => x.kind === "park");
   const shopName = shop && NEARBY_KINDS.find((k) => k.id === shop.kind).label;
   const html = [
     ...parts.map((x) => `<span class="card-travel">${icon(x.byCar ? "car" : "train")}${esc(x.who)} ${esc(x.time)}</span>`),
-    stop ? `<span>${icon("walk")}${minutes(stop.walk_s)} to ${esc(stopName(stop))}</span>` : "",
+    station ? `<span>${icon("train")}${esc(station.stop.name)} ${minutes(station.walk_s)}</span>` : "",
+    trams.length ? `<span>${icon("tram")}${esc(trams.join(" · "))}</span>` : "",
+    buses ? `<span>${icon("bus")}${buses} bus${buses === 1 ? "" : "es"}</span>` : "",
     shop ? `<span>${icon("cart")}${esc(shopName)} ${minutes(shop.walk_s)}</span>` : "",
     park ? `<span>${icon("tree")}Park ${minutes(park.walk_s)}</span>` : ""
   ].filter(Boolean).join("");
   const label = [
     ...parts.map((x) => `${x.who} ${x.time.replace("~", "about ")} by ${x.byCar ? "car" : "public transport"}`),
-    stop ? `${minutes(stop.walk_s)} walk to ${stopName(stop)}` : "",
+    station ? `${minutes(station.walk_s)} walk to ${stopLabel(station)}` : "",
+    trams.length ? `tram${trams.length === 1 ? "" : "s"} ${trams.join(", ")}` : "",
+    buses ? `${buses} frequent bus route${buses === 1 ? "" : "s"}` : "",
     shop ? `${minutes(shop.walk_s)} walk to ${shopName}` : "",
     park ? `${minutes(park.walk_s)} walk to ${park.name}` : ""
   ].filter(Boolean).join(", ");

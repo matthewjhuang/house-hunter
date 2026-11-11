@@ -64,18 +64,41 @@ export function demoData() {
         duration_s: Math.round((4 + d * 2.3) * 60), distance_m: Math.round(d * 1300), manual_s: null, computed_at: day(-1, 3) });
     }
   }
-  const stops = {
-    p1: [{ kind: "train", name: "Anstey", stop_no: null, walk_s: 682, distance_m: 853 }, { kind: "tram", name: "Albion St/Melville Rd", stop_no: "37", walk_s: 697, distance_m: 872 }],
-    p2: [{ kind: "train", name: "Jewell", stop_no: null, walk_s: 480, distance_m: 600 }, { kind: "tram", name: "Brunswick Rd/Sydney Rd", stop_no: "19", walk_s: 150, distance_m: 190 }],
-    p4: [{ kind: "train", name: "Coburg", stop_no: null, walk_s: 540, distance_m: 690 }, { kind: "tram", name: "Bell St/Sydney Rd", stop_no: "39", walk_s: 300, distance_m: 380 }],
-    p5: [{ kind: "tram", name: "Lygon St/Queensberry St", stop_no: "1", walk_s: 240, distance_m: 310 }]
+  // Public transport near each listing: lines, how often they run at 8am and the last
+  // service home, with stops a plausible walk away.
+  const at = (h, i) => new Date(Date.UTC(2026, 10, 18, h - 11, i)).toISOString();
+  const lineSets = {
+    p1: [
+      { mode: "train", route: "Upfield", stop: "Anstey", walk: 11, dirs: [["Flinders Street via City Loop", true, 6, at(24, 2)], ["Upfield", false, 6, at(24, 41)]] },
+      { mode: "tram", route: "19", stop: "Albion St/Sydney Rd", no: "26", walk: 9, dirs: [["Flinders Street", true, 12, at(24, 31)], ["North Coburg", false, 11, at(25, 12)]] },
+      { mode: "tram", route: "58", stop: "Albion St/Melville Rd", no: "37", walk: 12, dirs: [["Toorak", true, 8, at(23, 58)], ["West Coburg", false, 7, at(24, 44)]] },
+      { mode: "bus", route: "503", stop: "Patterson St/Albion St", walk: 4, dirs: [["Essendon", false, 4, at(21, 20)], ["East Brunswick", false, 4, at(21, 5)]] }
+    ],
+    p2: [
+      { mode: "train", route: "Upfield", stop: "Jewell", walk: 8, dirs: [["Flinders Street via City Loop", true, 6, at(24, 4)], ["Upfield", false, 6, at(24, 39)]] },
+      { mode: "tram", route: "19", stop: "Brunswick Rd/Sydney Rd", no: "19", walk: 3, dirs: [["Flinders Street", true, 12, at(24, 35)], ["North Coburg", false, 11, at(25, 8)]] }
+    ],
+    p4: [
+      { mode: "train", route: "Upfield", stop: "Coburg", walk: 9, dirs: [["Flinders Street via City Loop", true, 6, at(23, 55)], ["Upfield", false, 6, at(24, 48)]] },
+      { mode: "tram", route: "19", stop: "Bell St/Sydney Rd", no: "39", walk: 5, dirs: [["Flinders Street", true, 12, at(24, 25)], ["North Coburg", false, 11, at(25, 18)]] }
+    ],
+    p5: [
+      { mode: "tram", route: "1", stop: "Lygon St/Queensberry St", no: "1", walk: 4, dirs: [["South Melbourne Beach", true, 10, at(24, 40)], ["East Coburg", false, 9, at(25, 2)]] },
+      { mode: "tram", route: "6", stop: "Lygon St/Queensberry St", no: "1", walk: 4, dirs: [["Glen Iris", true, 10, at(24, 50)], ["Moreland", false, 9, at(25, 14)]] }
+    ]
   };
-  // Put each stop a plausible walk from its listing, so they show on the map.
   for (const p of props) {
-    if (!stops[p.id]) continue;
-    p.nearest_stops = stops[p.id].map((s, i) => ({ ...s,
-      lat: p.latitude + Math.sin(2 + i * 2.4) * s.distance_m * 0.8 / 111000,
-      lon: p.longitude + Math.cos(2 + i * 2.4) * s.distance_m * 0.8 / 88000 }));
+    const set = lineSets[p.id];
+    if (!set) continue;
+    p.transit = {
+      version: "2026-11-12",
+      lines: set.map((l, i) => ({
+        mode: l.mode, route: l.route, walk_s: l.walk * 60, distance_m: l.walk * 80,
+        stop: { name: l.stop, no: l.no ?? null,
+          lat: p.latitude + Math.sin(1 + i * 1.9) * l.walk * 70 / 111000, lon: p.longitude + Math.cos(1 + i * 1.9) * l.walk * 70 / 88000 },
+        dirs: l.dirs.map(([to, city, peak, last]) => ({ to, city, peak, last }))
+      }))
+    };
   }
   // Nearby: the closest of each store and a park, spread around each listing.
   const nearbyKinds = [["coles", "Coles"], ["woolworths", "Woolworths Metro"], ["aldi", "Aldi"], ["chemist_warehouse", "Chemist Warehouse"], ["park", "Gilpin Park"]];
