@@ -248,6 +248,12 @@ Share menu lists House Hunter once it's installed (`share_target` in the manifes
   your places as square markers. Filter by stage, tap a pin for a preview, tap the preview to
   open the listing.
 
+- **Nearby** on every active listing: the closest Coles, Woolworths, Aldi, Chemist
+  Warehouse and park (named, at least 1 hectare), each with the walk and, past a 10-minute
+  walk, the drive. Small stores show their real name ("Coles Local", "Woolworths Metro").
+  Tap one for walking directions. Cards show the closest supermarket and the park; on the
+  map, tapping a listing zooms to it and shows these as small round markers.
+
 **No keys, no billing.** Everything is free, open data:
 
 | What | Service | Notes |
@@ -256,6 +262,7 @@ Share menu lists House Hunter once it's installed (`share_target` in the manifes
 | Public transport | [Transitous](https://transitous.org) (PTV timetables) | Arrive-by routing; also supplies the nearby stop list |
 | Car and walking | [OSRM](https://routing.openstreetmap.de) (FOSSGIS) | No traffic data, so car times are × 1.6 as a rush-hour allowance and shown with "~" |
 | Map | [OpenFreeMap](https://openfreemap.org) tiles, drawn by MapLibre | Light and dark styles follow the phone |
+| Stores and parks | OpenStreetMap via Overpass, saved to `nearby/nearby.json` | Rebuilt monthly by GitHub Actions; not stored in Supabase |
 
 They're community-run, so they can be slow or down for a while. Failed times are stored as
 errors and retried by the nightly run, or straight away with **Recalculate** at the bottom of
@@ -267,6 +274,16 @@ listing comes back from Rejected (so the import functions don't need to know). A
 clears the old coordinates unless the same update brings new ones (as imports do). Listings
 that only match a suburb get no times: the sheet asks you to check the address. The
 nightly run fills gaps and refreshes anything older than four weeks.
+
+**Nearby data and storage.** Supabase's free plan has little room, so the store and park
+list (~800 KB, about 3,000 entries) lives in the repo as `nearby/nearby.json`, not the
+database. `.github/workflows/nearby-data.yml` rebuilds it on the 1st of each month with
+`nearby/build.py` and commits it (run it any time from the Actions tab). `travel-times`
+reads it from GitHub; when the file's date changes, the nightly run recomputes every
+listing's Nearby. Each listing stores only its five results (~0.5 KB, `properties.nearby`).
+If Overpass is down or returns too little, the build fails and the old file stays. Run it
+locally with `python3 nearby/build.py` (macOS's built-in Python can't connect to Overpass;
+use a newer Python, or just use the Action). The cron job log is trimmed to 7 days daily.
 
 ## Things to know
 

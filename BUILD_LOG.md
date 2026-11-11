@@ -140,3 +140,28 @@ Tags are now Work, Gym, Shops, Health, Family + Friends and General: Study is go
 General replaces Other. The enum was rebuilt (any study/other rows would have become
 general; none existed). Show on Cards now defaults on for Work only.
 
+## Stage 2.4 — Nearby: closest supermarkets, Chemist Warehouse and park (11 Nov 2026)
+
+Your places are fixed trips; Nearby is "whichever is closest to this house". Each active
+listing gets its closest Coles, Woolworths, Aldi, Chemist Warehouse (separate lines, as
+asked) and named park of at least 1 ha, with walk and drive times.
+
+**Storage first.** Supabase storage is tight, so the ~3,000 stores and parks aren't in the
+database: `nearby/build.py` pulls them from Overpass into `nearby/nearby.json` (820 KB) and a
+monthly GitHub Action commits it; `travel-times` reads it from raw.githubusercontent.com.
+Only each listing's results are stored (~460 bytes each). Parks keep 16 outline points so
+distance is to the park's edge, not its middle (Victoria Park is 84 m from Adeney Ave, not
+its centre). Also added a daily job trimming `cron.job_run_details` to 7 days, which was
+growing faster than anything else (send-reminders runs 288 times a day).
+
+**Found along the way.** macOS's system Python fails the TLS handshake with Overpass (curl
+is fine), so the first file was built by the Action itself, which also proved the
+workflow. FOSSGIS OSRM answered a burst of requests with 429, so its calls are now spaced
+1.1 s apart and retried once. Checked on the four real active listings, e.g. 10/72 Cobden
+St, Kew: Coles 8 min walk, Woolworths 12, Aldi 60 (shown with ~10 min by car), Chemist
+Warehouse 13, Eglinton Reserve 3.
+
+**Design.** A Nearby group after Getting around, each row in its chain's colour; car times
+hidden under a 10-minute walk; tap for walking directions. Cards add the closest supermarket
+and the park. On the map, selecting a listing zooms to fit it and its Nearby markers.
+
