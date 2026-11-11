@@ -1114,6 +1114,12 @@ body.sheet-open .toast { bottom: calc(var(--safe-bottom) + 84px); }
 [data-kind="family"] { --kind: #b25000; }
 [data-kind="health"] { --kind: #c4314b; }
 [data-kind="general"] { --kind: #6e6e73; }
+/* Nearby: each chain's own colour, darkened where needed for the white glyph. */
+[data-kind="coles"] { --kind: #d8131b; }
+[data-kind="woolworths"] { --kind: #127a3c; }
+[data-kind="aldi"] { --kind: #1d3f8f; }
+[data-kind="chemist_warehouse"] { --kind: #c4314b; }
+[data-kind="park"] { --kind: #3b7d23; }
 [data-kind="train"] { --kind: #0072ce; }  /* PTV metro blue */
 [data-kind="tram"] { --kind: #4f8a10; }   /* PTV tram green, darkened for white */
 .place-name { display: block; }
@@ -1398,3 +1404,17 @@ body.map-tab { overflow: hidden; }
 }
 .row .switch { flex: none; min-height: 31px; }
 #map-gl { position: absolute; inset: 0; }
+.nearby-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--kind);
+  color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.nearby-pin svg { width: 14px; height: 14px; }
+@media (prefers-color-scheme: dark) { .nearby-pin { border-color: #1c1c1e; } }

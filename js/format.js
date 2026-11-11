@@ -30,6 +30,16 @@ export const PLACE_KINDS = [
   { id: "family", label: "Family + Friends", icon: "people" },
   { id: "general", label: "General", icon: "star" }
 ];
+// Nearby: the closest of each, worked out per listing by travel-times.
+export const NEARBY_KINDS = [
+  { id: "coles", label: "Coles", icon: "cart" },
+  { id: "woolworths", label: "Woolworths", icon: "cart" },
+  { id: "aldi", label: "Aldi", icon: "cart" },
+  { id: "chemist_warehouse", label: "Chemist Warehouse", icon: "pill" },
+  { id: "park", label: "Park", icon: "tree" }
+];
+export const SUPERMARKETS = ["coles", "woolworths", "aldi"];
+
 export const placeKind = (id) => PLACE_KINDS.find((k) => k.id === id) ?? PLACE_KINDS[PLACE_KINDS.length - 1];
 
 // "8 min", "1 hr 5 min"

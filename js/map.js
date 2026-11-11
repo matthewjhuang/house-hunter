@@ -1,8 +1,8 @@
 // Map tab: every listing that isn't Rejected as a price pin in its stage colour, and
-// your places as square markers. Tap a pin for a preview, tap the preview to open
-// the listing. OpenStreetMap data from OpenFreeMap (free, no key) in its light and
+// your places as square markers. Tap a pin for a preview (and its closest shops and
+// park as small round markers), tap the preview to open the listing. OpenStreetMap data from OpenFreeMap (free, no key) in its light and
 // dark styles, drawn by MapLibre, which loads the first time the tab opens.
-import { STAGES, esc, icon, money, title, stageLabel, placeKind } from "./format.js";
+import { STAGES, NEARBY_KINDS, esc, icon, money, minutes, title, stageLabel, placeKind } from "./format.js";
 import { store, subscribe, placesSorted, ownerKey } from "./store.js";
 import { openProperty } from "./propertySheet.js";
 import { ownerLabel } from "./places.js";
@@ -152,6 +152,17 @@ function render() {
       if (q.latitude != null && q.geocode_status !== "not_found") wanted.set(q.id, placeMarker(q));
     }
   }
+  for (const x of (selected && store.properties.get(selected)?.nearby?.items) || []) {
+    const k = NEARBY_KINDS.find((n) => n.id === x.kind);
+    if (!k) continue;
+    wanted.set(`nearby:${x.kind}`, {
+      kind: "nearby",
+      lngLat: [x.lon, x.lat],
+      html: `<span class="nearby-pin" data-kind="${k.id}">${icon(k.icon)}</span>`,
+      label: `${x.name}, ${minutes(x.walk_s)} walk`,
+      z: 0
+    });
+  }
 
   for (const [id, m] of markers) {
     if (!wanted.has(id)) { m.marker.remove(); markers.delete(id); }
@@ -219,11 +230,19 @@ function select(id) {
   render();
   const p = id ? store.properties.get(id) : null;
   if (!p) return;
-  // Keep the chosen pin clear of the chips and the preview card.
+  const duration = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 500;
+  // Zoom to the listing and its closest shops and park, clear of the chips and preview.
+  const items = p.nearby?.items ?? [];
+  if (items.length) {
+    const bounds = items.reduce((b, x) => b.extend([x.lon, x.lat]), new ml.LngLatBounds([p.longitude, p.latitude], [p.longitude, p.latitude]));
+    map.fitBounds(bounds, { padding: { ...PADDING, bottom: 230 }, maxZoom: 16, duration });
+    return;
+  }
+  // Otherwise just keep the chosen pin clear of the chips and the preview card.
   const pt = map.project([p.longitude, p.latitude]);
   const { clientWidth: w, clientHeight: h } = canvas;
   if (pt.x < PADDING.left || pt.x > w - PADDING.right || pt.y < PADDING.top || pt.y > h - 170) {
-    map.easeTo({ center: [p.longitude, p.latitude], offset: [0, -40], duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 400 });
+    map.easeTo({ center: [p.longitude, p.latitude], offset: [0, -40], duration });
   }
 }
 

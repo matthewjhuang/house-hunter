@@ -13,7 +13,7 @@ import { openSheet, openMenu, toast, showError, confirmDestructive, onLongPress,
 import { moveMenuItems, rejectFlow, restore, deleteFlow, setBooked } from "./actions.js";
 import { openEdit } from "./editSheet.js";
 import { supabase } from "./supabaseClient.js";
-import { travelSection, onTravelClick, onTravelSubmit } from "./travel.js";
+import { travelSection, nearbySection, onTravelClick, onTravelSubmit } from "./travel.js";
 
 let openId = null;
 let unsubscribe = null;
@@ -52,7 +52,7 @@ export function openProperty(id, { highlightMissing = false, from = location.has
   });
 }
 
-const SECTIONS = ["gallery", "head", "notices", "inspections", "travel", "details", "agent", "links", "description", "checklist", "comments", "danger"];
+const SECTIONS = ["gallery", "head", "notices", "inspections", "travel", "nearby", "details", "agent", "links", "description", "checklist", "comments", "danger"];
 
 function setup(id, body, sheet, highlightMissing) {
   openId = id;
@@ -200,6 +200,7 @@ const RENDER = {
   },
 
   travel: travelSection,
+  nearby: nearbySection,
 
   details(p) {
     const rows = [

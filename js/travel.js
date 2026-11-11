@@ -1,7 +1,7 @@
 // Travel times on the property sheet ("Getting around") and the short line on board
 // cards. The numbers come from the travel-times Edge Function; either of you can
 // type in your own time for a place, which then wins over the calculated one.
-import { esc, icon, minutes, distance } from "./format.js";
+import { esc, icon, minutes, distance, NEARBY_KINDS, SUPERMARKETS } from "./format.js";
 import { store, touch, travelFor, travelSeconds, upsertRow, ownerKey } from "./store.js";
 import { openMenu, toast, showError } from "./ui.js";
 import { ownerLabel } from "./places.js";
@@ -86,6 +86,43 @@ export function travelSection(p) {
       ${store.demo ? "" : `<button class="btn btn-plain inline-link" data-act="recalc">Recalculate</button>`}</p>`;
 }
 
+// ---------------------------------------------------------------- nearby
+
+// The closest Coles, Woolworths, Aldi, Chemist Warehouse and park, by walking time.
+// Car times only show when it's more than a 10-minute walk.
+export function nearbySection(p) {
+  if (p.stage === "rejected" || !located(p)) return "";
+  const header = `<div class="group-header">Nearby</div>`;
+  if (!p.nearby) {
+    return `${header}<div class="group"><div class="progress-row"><span class="spinner" aria-hidden="true"></span>Finding the closest shops and parks…</div></div>`;
+  }
+  const items = p.nearby.items ?? [];
+  if (!items.length) return "";
+  const rows = NEARBY_KINDS.map((k) => {
+    const x = items.find((i) => i.kind === k.id);
+    if (!x) return "";
+    const isPark = k.id === "park";
+    const title = isPark ? x.name : k.label;
+    // "Coles Local", "Woolworths Metro": worth knowing it's a small store.
+    const detail = [isPark ? `Park${x.ha ? ` · ${x.ha >= 10 ? Math.round(x.ha) : x.ha} ha` : ""}` : x.name !== k.label ? x.name : "", distance(x.distance_m)].filter(Boolean).join(" · ");
+    return `<button class="row travel-row" data-nearby="${k.id}">
+      <span class="place-icon" data-kind="${k.id}">${icon(k.icon)}</span>
+      <span class="row-label">${esc(title)}<span class="t-footnote secondary">${esc(detail)}</span></span>
+      <span class="travel-times">
+        <span>${icon("walk")}<span class="visually-hidden">Walk: </span>${minutes(x.walk_s)}</span>
+        ${x.drive_s != null && x.walk_s > 600 ? `<span class="secondary">${icon("car")}<span class="visually-hidden">Driving: </span>~${minutes(x.drive_s)}</span>` : ""}
+      </span>
+    </button>`;
+  }).join("");
+  return `${header}<div class="group">${rows}</div>
+    <p class="group-footer">The closest of each by walking. Stores and parks from OpenStreetMap, updated ${esc(new Date(`${p.nearby.version}T12:00:00`).toLocaleDateString("en-AU", { month: "long", year: "numeric" }))}.</p>`;
+}
+
+function nearbyDirections(p, x) {
+  const params = new URLSearchParams({ api: "1", origin: `${p.latitude},${p.longitude}`, destination: `${x.lat},${x.lon}`, travelmode: "walking" });
+  return `https://www.google.com/maps/dir/?${params}`;
+}
+
 function directionsUrl(p, place, mode) {
   const params = new URLSearchParams({
     api: "1",
@@ -105,6 +142,11 @@ export function onTravelClick(t, p, body) {
   }
   if (t.dataset.act === "recalc") {
     recalculate(p, t);
+    return true;
+  }
+  if (t.dataset.nearby) {
+    const x = p.nearby?.items?.find((i) => i.kind === t.dataset.nearby);
+    if (x) window.open(nearbyDirections(p, x), "_blank", "noopener");
     return true;
   }
   const placeId = t.dataset.travel;
@@ -166,7 +208,7 @@ async function recalculate(p, button) {
 
 // Times to the places marked Show on Cards, each the way that place is usually reached
 // and labelled by whose it is ("Matthew ~18 min" by car, "Hannah 58 min" by train),
-// plus the walk to the nearest stop.
+// plus the walk to the nearest stop, supermarket and park.
 export function cardTravel(p) {
   if (p.stage === "rejected" || !located(p)) return { html: "", label: "" };
   const chosen = travelFor(p.id).filter((x) => x.place.show_on_cards).slice(0, 3);
@@ -180,14 +222,23 @@ export function cardTravel(p) {
     const who = key && ownerCount(key) === 1 ? ownerLabel(key) : place.name;
     return { who, byCar, time: `${byCar && row.manual_s == null ? "~" : ""}${minutes(secs)}` };
   }).filter(Boolean);
-  const stop = [...(p.nearest_stops ?? [])].sort((a, b) => a.walk_s - b.walk_s)[0];
+  const closest = (list) => [...list].sort((a, b) => a.walk_s - b.walk_s)[0];
+  const stop = closest(p.nearest_stops ?? []);
+  const items = p.nearby?.items ?? [];
+  const shop = closest(items.filter((x) => SUPERMARKETS.includes(x.kind)));
+  const park = items.find((x) => x.kind === "park");
+  const shopName = shop && NEARBY_KINDS.find((k) => k.id === shop.kind).label;
   const html = [
     ...parts.map((x) => `<span class="card-travel">${icon(x.byCar ? "car" : "train")}${esc(x.who)} ${esc(x.time)}</span>`),
-    stop ? `<span>${icon("walk")}${minutes(stop.walk_s)} to ${esc(stopName(stop))}</span>` : ""
+    stop ? `<span>${icon("walk")}${minutes(stop.walk_s)} to ${esc(stopName(stop))}</span>` : "",
+    shop ? `<span>${icon("cart")}${esc(shopName)} ${minutes(shop.walk_s)}</span>` : "",
+    park ? `<span>${icon("tree")}Park ${minutes(park.walk_s)}</span>` : ""
   ].filter(Boolean).join("");
   const label = [
     ...parts.map((x) => `${x.who} ${x.time.replace("~", "about ")} by ${x.byCar ? "car" : "public transport"}`),
-    stop ? `${minutes(stop.walk_s)} walk to ${stopName(stop)}` : ""
+    stop ? `${minutes(stop.walk_s)} walk to ${stopName(stop)}` : "",
+    shop ? `${minutes(shop.walk_s)} walk to ${shopName}` : "",
+    park ? `${minutes(park.walk_s)} walk to ${park.name}` : ""
   ].filter(Boolean).join(", ");
   return { html, label };
 }

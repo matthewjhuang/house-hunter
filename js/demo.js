@@ -71,6 +71,19 @@ export function demoData() {
     p5: [{ kind: "tram", name: "Lygon St/Queensberry St", stop_no: "1", walk_s: 240, distance_m: 310 }]
   };
   for (const p of props) if (stops[p.id]) p.nearest_stops = stops[p.id];
+  // Nearby: the closest of each store and a park, spread around each listing.
+  const nearbyKinds = [["coles", "Coles"], ["woolworths", "Woolworths Metro"], ["aldi", "Aldi"], ["chemist_warehouse", "Chemist Warehouse"], ["park", "Gilpin Park"]];
+  props.filter((p) => p.latitude && p.stage !== "rejected").forEach((p, n) => {
+    p.nearby = {
+      version: "2026-11-01",
+      items: nearbyKinds.map(([kind, name], i) => {
+        const walk = [11, 6, 24, 9, 4][(i + n) % 5] * 60;
+        const angle = (i + n) * 1.3;
+        return { kind, name, lat: p.latitude + Math.sin(angle) * walk * 1.1 / 111000, lon: p.longitude + Math.cos(angle) * walk * 1.1 / 88000,
+          distance_m: Math.round(walk * 1.3), walk_s: walk, drive_s: Math.round(walk / 4), ...(kind === "park" ? { ha: 4.2 } : {}) };
+      })
+    };
+  });
   const map = (rows) => new Map(rows.map((r) => [r.id, r]));
   return {
     user: { id: me, email: "matthewjhuang@gmail.com" },
