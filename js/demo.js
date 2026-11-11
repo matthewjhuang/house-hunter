@@ -70,7 +70,13 @@ export function demoData() {
     p4: [{ kind: "train", name: "Coburg", stop_no: null, walk_s: 540, distance_m: 690 }, { kind: "tram", name: "Bell St/Sydney Rd", stop_no: "39", walk_s: 300, distance_m: 380 }],
     p5: [{ kind: "tram", name: "Lygon St/Queensberry St", stop_no: "1", walk_s: 240, distance_m: 310 }]
   };
-  for (const p of props) if (stops[p.id]) p.nearest_stops = stops[p.id];
+  // Put each stop a plausible walk from its listing, so they show on the map.
+  for (const p of props) {
+    if (!stops[p.id]) continue;
+    p.nearest_stops = stops[p.id].map((s, i) => ({ ...s,
+      lat: p.latitude + Math.sin(2 + i * 2.4) * s.distance_m * 0.8 / 111000,
+      lon: p.longitude + Math.cos(2 + i * 2.4) * s.distance_m * 0.8 / 88000 }));
+  }
   // Nearby: the closest of each store and a park, spread around each listing.
   const nearbyKinds = [["coles", "Coles"], ["woolworths", "Woolworths Metro"], ["aldi", "Aldi"], ["chemist_warehouse", "Chemist Warehouse"], ["park", "Gilpin Park"]];
   props.filter((p) => p.latitude && p.stage !== "rejected").forEach((p, n) => {

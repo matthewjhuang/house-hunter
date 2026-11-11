@@ -12,7 +12,7 @@ let editing = null; // { propertyId, placeId, mode } while typing your own time
 
 export const located = (p) => p.latitude != null && p.longitude != null && (p.geocode_status == null || p.geocode_status === "ok");
 
-function stopName(s) {
+export function stopName(s) {
   return s.kind === "train" ? `${s.name} Station` : s.name;
 }
 
@@ -118,12 +118,12 @@ export function nearbySection(p) {
     <p class="group-footer">The closest of each by walking. Stores and parks from OpenStreetMap, updated ${esc(new Date(`${p.nearby.version}T12:00:00`).toLocaleDateString("en-AU", { month: "long", year: "numeric" }))}.</p>`;
 }
 
-function nearbyDirections(p, x) {
+export function nearbyDirections(p, x) {
   const params = new URLSearchParams({ api: "1", origin: `${p.latitude},${p.longitude}`, destination: `${x.lat},${x.lon}`, travelmode: "walking" });
   return `https://www.google.com/maps/dir/?${params}`;
 }
 
-function directionsUrl(p, place, mode) {
+export function directionsUrl(p, place, mode) {
   const params = new URLSearchParams({
     api: "1",
     origin: `${p.latitude},${p.longitude}`,

@@ -1418,3 +1418,49 @@ body.map-tab { overflow: hidden; }
 }
 .nearby-pin svg { width: 14px; height: 14px; }
 @media (prefers-color-scheme: dark) { .nearby-pin { border-color: #1c1c1e; } }
+
+/* Tap-for-info cards on the map (MapLibre popups). */
+.map-info .maplibregl-popup-content {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface-raised);
+  color: var(--label);
+  box-shadow: var(--shadow-lift);
+  font: inherit;
+  font-size: 0.882rem;
+  line-height: 1.35;
+}
+.map-info.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.map-info.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.map-info.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color: var(--surface-raised); }
+.map-info.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.map-info.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.map-info.maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color: var(--surface-raised); }
+.map-info.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--surface-raised); }
+.map-info.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--surface-raised); }
+.map-info .maplibregl-popup-close-button {
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  color: var(--label-2);
+  border-radius: 0 14px 0 8px;
+}
+.map-info .info-head { display: flex; align-items: center; gap: 10px; margin: 0 24px 8px 0; }
+.map-info .info-head strong { display: block; font-size: 0.941rem; }
+.map-info .info-head .secondary { font-size: 0.765rem; }
+.map-info .info-line { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.map-info .info-line svg { width: 16px; height: 16px; flex: none; color: var(--label-2); }
+.map-info .info-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  margin: 8px -14px -12px;
+  padding: 0 14px;
+  border-top: 0.5px solid var(--separator);
+  color: var(--tint);
+  font-weight: 600;
+  text-decoration: none;
+}
+.map-info .info-link svg { width: 12px; height: 12px; }
+.map-marker.nearby, .map-marker.place { cursor: pointer; }

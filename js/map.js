@@ -1,12 +1,14 @@
 // Map tab: every listing that isn't Rejected as a price pin in its stage colour, and
-// your places as square markers. Tap a pin for a preview (and its closest shops and
-// park as small round markers), tap the preview to open the listing. OpenStreetMap data from OpenFreeMap (free, no key) in its light and
-// dark styles, drawn by MapLibre, which loads the first time the tab opens.
+// your places as square markers. Tap a pin for a preview, plus its nearest station,
+// tram stop, shops and park as small round markers; tap the preview to open the
+// listing. Tap a place or a small marker for its details and directions.
+// OpenStreetMap data from OpenFreeMap (free, no key) in its light and dark styles,
+// drawn by MapLibre, which loads the first time the tab opens.
 import { STAGES, NEARBY_KINDS, esc, icon, money, minutes, title, stageLabel, placeKind } from "./format.js";
-import { store, subscribe, placesSorted, ownerKey } from "./store.js";
+import { store, subscribe, placesSorted, ownerKey, travelFor, travelSeconds } from "./store.js";
 import { openProperty } from "./propertySheet.js";
 import { ownerLabel } from "./places.js";
-import { located, cardTravel } from "./travel.js";
+import { located, cardTravel, stopName, nearbyDirections, directionsUrl } from "./travel.js";
 
 const MAPLIBRE = "https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/";
 const STYLES = {
@@ -22,7 +24,8 @@ let map = null;
 let loading = null;
 let fitted = false;
 let selected = null;
-const markers = new Map(); // id → { marker, el, html }
+let popup = null;
+const markers = new Map(); // id → { marker, el, html, info }
 const hidden = new Set(JSON.parse(localStorage.getItem("hh.mapHidden") ?? "[]"));
 
 export function initMap(el) {
@@ -92,6 +95,7 @@ export async function showMap() {
   map.addControl(new ml.AttributionControl({ compact: false }), "bottom-right");
   dark.addEventListener("change", () => map.setStyle(dark.matches ? STYLES.dark : STYLES.light));
   map.on("click", () => select(null));
+  popup = new ml.Popup({ className: "map-info", offset: 18, maxWidth: "280px", focusAfterOpen: false });
   render();
 }
 
@@ -134,6 +138,7 @@ function placeMarker(q) {
     lngLat: [q.longitude, q.latitude],
     html: `<span class="place-pin" data-kind="${kind.id}">${icon(kind.icon)}</span>`,
     label: `${q.name}, ${ownerLabel(ownerKey(q))}`,
+    info: () => placeInfo(q),
     z: 1
   };
 }
@@ -152,7 +157,20 @@ function render() {
       if (q.latitude != null && q.geocode_status !== "not_found") wanted.set(q.id, placeMarker(q));
     }
   }
-  for (const x of (selected && store.properties.get(selected)?.nearby?.items) || []) {
+  // The selected listing's nearest station and tram stop, closest shops and park.
+  const sp = selected && store.properties.get(selected);
+  for (const s of (sp && sp.nearest_stops) || []) {
+    if (s.lat == null) continue;
+    wanted.set(`stop:${s.kind}`, {
+      kind: "nearby",
+      lngLat: [s.lon, s.lat],
+      html: `<span class="nearby-pin" data-kind="${s.kind}">${icon(s.kind)}</span>`,
+      label: `${stopName(s)}, ${minutes(s.walk_s)} walk`,
+      info: () => stopInfo(sp, s),
+      z: 0
+    });
+  }
+  for (const x of (sp && sp.nearby?.items) || []) {
     const k = NEARBY_KINDS.find((n) => n.id === x.kind);
     if (!k) continue;
     wanted.set(`nearby:${x.kind}`, {
@@ -160,6 +178,7 @@ function render() {
       lngLat: [x.lon, x.lat],
       html: `<span class="nearby-pin" data-kind="${k.id}">${icon(k.icon)}</span>`,
       label: `${x.name}, ${minutes(x.walk_s)} walk`,
+      info: () => nearbyInfo(sp, x, k),
       z: 0
     });
   }
@@ -176,13 +195,18 @@ function render() {
       if (w.kind === "property") {
         el.addEventListener("click", (e) => { e.stopPropagation(); select(id); });
       } else {
-        el.addEventListener("click", (e) => e.stopPropagation());
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const info = markers.get(id)?.info;
+          if (info) popup.setLngLat(markers.get(id).marker.getLngLat()).setHTML(info()).addTo(map);
+        });
       }
       const marker = new ml.Marker({ element: el, anchor: w.kind === "property" ? "bottom" : "center" }).setLngLat(w.lngLat).addTo(map);
       m = { marker, el, html: "" };
       markers.set(id, m);
     }
     m.marker.setLngLat(w.lngLat);
+    m.info = w.info;
     if (m.html !== w.html) { m.el.innerHTML = w.html; m.html = w.html; }
     m.el.setAttribute("aria-label", w.label);
     m.el.title = w.label;
@@ -227,6 +251,7 @@ function fit(animate) {
 function select(id) {
   if (selected === id) return;
   selected = id;
+  popup?.remove();
   render();
   const p = id ? store.properties.get(id) : null;
   if (!p) return;
@@ -264,4 +289,60 @@ function renderPreview() {
     <button class="icon-btn map-preview-close" data-close aria-label="Close preview">${icon("xmark")}</button>
   </div>`;
   if (previewEl.dataset.html !== html) { previewEl.innerHTML = html; previewEl.dataset.html = html; }
+}
+
+// ---------------------------------------------------------------- tap-for-info cards
+
+function infoCard({ kind, glyph, title, sub, lines, link, linkLabel }) {
+  return `<div class="info-head"><span class="place-icon" data-kind="${kind}">${icon(glyph)}</span>
+      <div><strong>${esc(title)}</strong>${sub ? `<div class="secondary">${esc(sub)}</div>` : ""}</div></div>
+    ${lines.filter(Boolean).map((l) => `<div class="info-line">${l}</div>`).join("")}
+    ${link ? `<a class="info-link" href="${esc(link)}" target="_blank" rel="noopener">${esc(linkLabel)}${icon("chevron")}</a>` : ""}`;
+}
+
+const from = (p) => `<span class="secondary">From ${esc(title(p))}</span>`;
+const walkLine = (walk_s, metres) => `${icon("walk")}${minutes(walk_s)} walk${metres ? ` · ${metres < 1000 ? `${Math.round(metres / 10) * 10} m` : `${(metres / 1000).toFixed(1)} km`}` : ""}`;
+
+function stopInfo(p, s) {
+  return infoCard({
+    kind: s.kind, glyph: s.kind, title: stopName(s),
+    sub: s.kind === "train" ? "Train station" : `Tram stop${s.stop_no ? ` ${s.stop_no}` : ""}`,
+    lines: [walkLine(s.walk_s, s.distance_m), from(p)],
+    link: nearbyDirections(p, s), linkLabel: "Walking directions"
+  });
+}
+
+function nearbyInfo(p, x, k) {
+  const isPark = x.kind === "park";
+  return infoCard({
+    kind: x.kind, glyph: k.icon, title: isPark ? x.name : k.label,
+    sub: isPark ? `Park${x.ha ? ` · ${x.ha} ha` : ""}` : x.name !== k.label ? x.name : "",
+    lines: [walkLine(x.walk_s, x.distance_m), x.drive_s != null && x.walk_s > 600 ? `${icon("car")}~${minutes(x.drive_s)} drive` : "", from(p)],
+    link: nearbyDirections(p, x), linkLabel: "Walking directions"
+  });
+}
+
+// A place: whose it is, and with a listing selected, the times from that listing.
+function placeInfo(q) {
+  const kind = placeKind(q.kind);
+  const p = selected && store.properties.get(selected);
+  const t = p && travelFor(p.id).find((x) => x.place.id === q.id);
+  const line = (row, mode) => {
+    const secs = travelSeconds(row);
+    if (secs == null) return "";
+    const approx = mode === "drive" && row.manual_s == null ? "~" : "";
+    return `${icon(mode === "drive" ? "car" : "train")}${approx}${minutes(secs)} ${mode === "drive" ? "drive" : "by public transport"}`;
+  };
+  const order = q.travel_mode === "drive" ? ["drive", "transit"] : ["transit", "drive"];
+  return infoCard({
+    kind: kind.id, glyph: kind.icon, title: q.name,
+    sub: `${kind.label} · ${ownerLabel(ownerKey(q))}`,
+    lines: [
+      `<span class="secondary">${esc(q.address)}</span>`,
+      ...(t ? order.map((m) => line(t[m], m)) : []),
+      t ? from(p) : `<span class="secondary">Tap a listing to see times from it.</span>`
+    ],
+    link: p ? directionsUrl(p, q, q.travel_mode) : `https://www.google.com/maps/search/?${new URLSearchParams({ api: "1", query: `${q.latitude},${q.longitude}` })}`,
+    linkLabel: p ? "Directions from this listing" : "Open in Google Maps"
+  });
 }

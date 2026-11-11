@@ -251,8 +251,10 @@ Share menu lists House Hunter once it's installed (`share_target` in the manifes
 - **Nearby** on every active listing: the closest Coles, Woolworths, Aldi, Chemist
   Warehouse and park (named, at least 1 hectare), each with the walk and, past a 10-minute
   walk, the drive. Small stores show their real name ("Coles Local", "Woolworths Metro").
-  Tap one for walking directions. Cards show the closest supermarket and the park; on the
-  map, tapping a listing zooms to it and shows these as small round markers.
+  Tap one for walking directions. Cards show the closest supermarket and the park.
+- **On the map**, tapping a listing zooms to it and shows its nearest station, tram stop,
+  shops and park as small round markers. Tap any of those, or one of your places, for a
+  card with the walk (or, for places, the times from that listing) and directions.
 
 **No keys, no billing.** Everything is free, open data:
 

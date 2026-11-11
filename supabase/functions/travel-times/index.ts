@@ -255,7 +255,7 @@ async function nearestStops(at: Point) {
     });
     if (best < 0) continue;
     const s = candidates[best];
-    result.push({ kind, name: s.name, stop_no: s.stop_no, walk_s: Math.round(durations[0][best]!), distance_m: Math.round(distances[0][best] ?? metres(at, s)) });
+    result.push({ kind, name: s.name, stop_no: s.stop_no, lat: s.lat, lon: s.lng, walk_s: Math.round(durations[0][best]!), distance_m: Math.round(distances[0][best] ?? metres(at, s)) });
   }
   return result;
 }

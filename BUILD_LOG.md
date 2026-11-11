@@ -165,3 +165,12 @@ Warehouse 13, Eglinton Reserve 3.
 hidden under a 10-minute walk; tap for walking directions. Cards add the closest supermarket
 and the park. On the map, selecting a listing zooms to fit it and its Nearby markers.
 
+## Stage 2.5 — Stops on the map, tap-for-info markers (11 Nov 2026)
+
+Selecting a listing on the map now also shows its nearest station and tram stop. Stops
+didn't store a location, so `travel-times` now saves `lat`/`lon` with each, and the four
+existing listings' stops were cleared and refilled. Station, stop, shop, park and place
+markers open a MapLibre popup styled as an iOS card: what it is, the walk (or for a place,
+its usual-mode time first, then the other, from the selected listing), and a Google Maps
+directions link. Selecting another listing closes any open card.
+
