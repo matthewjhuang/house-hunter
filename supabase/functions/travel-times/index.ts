@@ -1,9 +1,11 @@
-// Supabase Edge Function: travel times, nearest stops and geocoding.
+// Supabase Edge Function: travel times, public transport lines, nearby shops and parks,
+// and geocoding.
 //
 // For every active property (anything not Rejected) and every place on the Places
 // tab, works out a weekday trip arriving 8:30am by public transport and by car, and
-// finds each property's nearest train station and tram stop with the walk to it, and
-// its closest Coles, Woolworths, Aldi, Chemist Warehouse and park ("Nearby").
+// finds the public transport lines within walking distance of each property (how often
+// they run at 8am, and the last service each way at night), and its closest Coles,
+// Woolworths, Aldi, Chemist Warehouse and park ("Nearby").
 // Properties and places without coordinates are geocoded first.
 //
 // All free, no keys:
@@ -12,7 +14,7 @@
 //   - Transitous (transitous.org, PTV's timetables) for public transport, arrive-by
 //   - OSRM (routing.openstreetmap.de) for car and walking times. It has no traffic,
 //     so car times are multiplied by PEAK_FACTOR as a rush-hour allowance
-//   - Transitous again for nearby stations and tram stops (PTV stop list)
+//   - Transitous again for the stops and timetables near each property
 //   - nearby/nearby.json in the GitHub repo for stores and parks (OpenStreetMap,
 //     rebuilt monthly by a GitHub Action), so they take no Supabase storage
 //
@@ -49,7 +51,7 @@ interface Property {
   latitude: number | null;
   longitude: number | null;
   geocode_status: string | null;
-  nearest_stops: unknown[] | null;
+  transit: { version?: string } | null;
   nearby: { version?: string } | null;
 }
 
@@ -73,7 +75,7 @@ interface TravelRow {
 
 type Point = { lat: number; lng: number };
 
-const PROPERTY_COLUMNS = "id, household_id, stage, address, suburb, state, postcode, latitude, longitude, geocode_status, nearest_stops, nearby";
+const PROPERTY_COLUMNS = "id, household_id, stage, address, suburb, state, postcode, latitude, longitude, geocode_status, transit, nearby";
 const PLACE_COLUMNS = "id, household_id, address, latitude, longitude, geocode_status";
 
 let deadline = 0;
@@ -139,9 +141,10 @@ async function locatePlace(admin: SupabaseClient, q: Place, force = false): Prom
 
 // ---------------------------------------------------------------- routing
 
-// Next Wednesday, 8:30am Melbourne time. Wednesday dodges Monday public holidays and
-// Cup Day, and is never today, so there's always a full timetable.
-function arrivalTime() {
+// Next Wednesday in Melbourne: "2026-11-18" and its UTC offset ("+11:00"). Wednesday
+// dodges Monday public holidays and Cup Day, and is never today, so there's always a
+// full timetable.
+function nextWednesday() {
   const day = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" });
   for (let d = 1; d <= 8; d++) {
     const at = new Date(Date.now() + d * 86_400_000);
@@ -149,9 +152,15 @@ function arrivalTime() {
     if (parts.weekday !== "Wed") continue;
     const offset = new Intl.DateTimeFormat("en-US", { timeZone: TZ, timeZoneName: "longOffset" })
       .formatToParts(at).find((x) => x.type === "timeZoneName")?.value.replace("GMT", "") || "+10:00";
-    return `${parts.year}-${parts.month}-${parts.day}T08:30:00${offset}`;
+    return { date: `${parts.year}-${parts.month}-${parts.day}`, offset };
   }
   throw new Error("no Wednesday found");
+}
+
+// Next Wednesday, 8:30am Melbourne time.
+function arrivalTime() {
+  const { date, offset } = nextWednesday();
+  return `${date}T08:30:00${offset}`;
 }
 
 interface Leg {
@@ -206,7 +215,7 @@ async function osrmTable(profile: "car" | "foot", sources: Point[], destinations
   return { durations: d.durations as (number | null)[][], distances: d.distances as (number | null)[][] };
 }
 
-// ---------------------------------------------------------------- nearest stops
+// ---------------------------------------------------------------- public transport
 
 function metres(a: Point, b: Point) {
   const rad = Math.PI / 180;
@@ -215,58 +224,169 @@ function metres(a: Point, b: Point) {
   return Math.sqrt(x * x + y * y) * 6_371_000;
 }
 
-interface Stop extends Point {
-  kind: "train" | "tram";
-  name: string;
-  stop_no: string | null;
+type Mode = "train" | "tram" | "bus";
+const TRAIN_MODES = ["SUBWAY", "RAIL", "SUBURBAN", "REGIONAL_RAIL", "METRO", "HIGHSPEED_RAIL", "LONG_DISTANCE"];
+const modeOf = (m: string): Mode | null => (TRAIN_MODES.includes(m) ? "train" : m === "TRAM" ? "tram" : m === "BUS" ? "bus" : null);
+// How far each is worth walking to: straight-line pre-filter, then real walking time.
+const LIMITS: Record<Mode, { straight: number; walk_s: number }> = {
+  train: { straight: 2000, walk_s: 25 * 60 },
+  tram: { straight: 1200, walk_s: 15 * 60 },
+  bus: { straight: 800, walk_s: 10 * 60 }
+};
+// Buses that come less often than this at 8am aren't worth listing.
+const MIN_BUS_PEAK = 4;
+const CBD = { lat: -37.8183, lng: 144.9671 }; // Flinders Street
+const TRANSIT_REFRESH_DAYS = 28;
+
+interface StopTime {
+  mode: string;
+  routeShortName?: string;
+  headsign?: string;
+  directionId?: string;
+  tripTo?: { lat: number; lon: number };
+  place: { departure?: string; scheduledDeparture?: string };
 }
 
-const TRAIN_MODES = ["SUBWAY", "RAIL", "SUBURBAN", "REGIONAL_RAIL", "METRO", "HIGHSPEED_RAIL", "LONG_DISTANCE"];
-const RADIUS = { train: 2500, tram: 1200 };
+interface StopPoint extends Point {
+  id: string;
+  name: string;
+  no: string | null;
+  modes: Set<Mode>;
+  d: number;
+}
 
-// Stops come from Transitous too (PTV's own stop list), which is steadier than Overpass.
-async function nearestStops(at: Point) {
-  const dLat = RADIUS.train / 111_000;
+// One direction of one line, as seen from one stop.
+interface Seen { s: StopPoint; peak: number; last: number; heads: Map<string, number>; routes: Map<string, number>; toCity: number; toOut: number }
+
+async function stopTimes(stopId: string, time: string, n: number, earlier = false): Promise<StopTime[]> {
+  const params = new URLSearchParams({ stopId, time, n: String(n), ...(earlier ? { direction: "EARLIER" } : {}) });
+  const d = await getJson(`https://api.transitous.org/api/v1/stoptimes?${params}`);
+  return d.stopTimes ?? [];
+}
+
+const departs = (x: StopTime) => x.place.departure ?? x.place.scheduledDeparture ?? "";
+const bump = (m: Map<string, number>, k?: string) => k && m.set(k, (m.get(k) ?? 0) + 1);
+
+// Every train station, tram route and frequent bus route within walking distance:
+// how often it runs 7:30-8:30am next Wednesday and the last departure each way that
+// night, each direction taken from its closest stop (the two sides of a road are
+// separate stops). "city" marks the direction heading towards the CBD; the last
+// service the other way is roughly when the last one gets you home.
+async function transitLines(at: Point) {
+  const reach = LIMITS.train.straight;
+  const dLat = reach / 111_000;
   const dLng = dLat / Math.cos((at.lat * Math.PI) / 180);
   const params = new URLSearchParams({ min: `${at.lat - dLat},${at.lng - dLng}`, max: `${at.lat + dLat},${at.lng + dLng}` });
   const list = await getJson(`https://api.transitous.org/api/v1/map/stops?${params}`);
-  const byKey = new Map<string, Stop>();
+
+  // Each kerbside stop on its own; a station's platforms as one.
+  const stops = new Map<string, StopPoint>();
   for (const s of list ?? []) {
-    const modes: string[] = s.modes ?? [];
-    const kind = modes.some((m) => TRAIN_MODES.includes(m)) ? "train" : modes.includes("TRAM") ? "tram" : null;
-    if (!kind || !s.name) continue;
+    const modes = new Set(((s.modes ?? []) as string[]).map(modeOf).filter(Boolean) as Mode[]);
     const point = { lat: s.lat, lng: s.lon };
-    if (metres(at, point) > RADIUS[kind]) continue;
-    // "Anstey Railway Station"; "Albion St/Sydney Rd #26" (one entry per direction).
-    const stopNo = kind === "tram" ? s.name.match(/#\s*(\w+)\s*$/)?.[1] ?? null : null;
+    const d = metres(at, point);
+    const fits = [...modes].filter((m) => d <= LIMITS[m].straight);
+    if (!fits.length || !s.name) continue;
+    const id = modes.has("train") && s.parentId ? s.parentId : s.stopId;
+    const no = s.name.match(/#\s*(\w+)\s*$/)?.[1] ?? null;
     const name = s.name.replace(/\s*#\s*\w+\s*$/, "").replace(/\s+(railway\s+)?station$/i, "").trim();
-    const key = `${kind}:${name.toLowerCase()}`;
-    const existing = byKey.get(key);
-    if (!existing || metres(at, point) < metres(at, existing)) byKey.set(key, { kind, name, stop_no: stopNo, ...point });
+    const existing = stops.get(id);
+    if (existing) { fits.forEach((m) => existing.modes.add(m)); if (d < existing.d) Object.assign(existing, point, { d }); continue; }
+    stops.set(id, { id, name, no, modes: new Set(fits), d, ...point });
   }
-  const result = [];
-  for (const kind of ["train", "tram"] as const) {
-    const candidates = [...byKey.values()].filter((s) => s.kind === kind).sort((a, b) => metres(at, a) - metres(at, b)).slice(0, 3);
-    if (!candidates.length) continue;
-    const { durations, distances } = await osrmTable("foot", [at], candidates);
-    let best = -1;
-    candidates.forEach((_, i) => {
-      if (durations[0][i] != null && (best < 0 || durations[0][i]! < durations[0][best]!)) best = i;
-    });
-    if (best < 0) continue;
-    const s = candidates[best];
-    result.push({ kind, name: s.name, stop_no: s.stop_no, lat: s.lat, lon: s.lng, walk_s: Math.round(durations[0][best]!), distance_m: Math.round(distances[0][best] ?? metres(at, s)) });
+  // Every station in range, then the closest kerbside stops (there can be hundreds).
+  const byDistance = [...stops.values()].sort((a, b) => a.d - b.d);
+  const nearest = [...byDistance.filter((s) => s.modes.has("train")), ...byDistance.filter((s) => !s.modes.has("train")).slice(0, 45)];
+
+  const { date, offset } = nextWednesday();
+  const peakFrom = new Date(`${date}T07:30:00${offset}`).getTime();
+  const peakTo = peakFrom + 3_600_000;
+  const nightFrom = new Date(`${date}T19:00:00${offset}`).getTime();
+  const thursday = new Date(new Date(`${date}T12:00:00${offset}`).getTime() + 86_400_000).toISOString().slice(0, 10);
+
+  // line key → direction key → what the closest stop serving that direction sees.
+  const lines = new Map<string, { mode: Mode; route: string; dirs: Map<string, Seen> }>();
+  for (let i = 0; i < nearest.length && !outOfTime(); i += 4) {
+    await Promise.all(nearest.slice(i, i + 4).map(async (s) => {
+      let peak: StopTime[], night: StopTime[];
+      try {
+        [peak, night] = await Promise.all([
+          stopTimes(s.id, `${date}T07:30:00${offset}`, 150),
+          stopTimes(s.id, `${thursday}T03:00:00${offset}`, 100, true)
+        ]);
+      } catch (err) {
+        console.error("stop times failed", s.name, (err as Error).message);
+        return;
+      }
+      const here = new Map<string, { mode: Mode; route: string; dirKey: string; seen: Seen }>();
+      for (const [x, isPeak] of [...peak.map((x) => [x, true] as const), ...night.map((x) => [x, false] as const)]) {
+        // Buses replacing trains during works still get you home, so they count as the train.
+        const mode = s.modes.has("train") && /replacement/i.test(x.routeShortName ?? "") ? "train" : modeOf(x.mode);
+        if (!mode || !s.modes.has(mode)) continue;
+        const t = new Date(departs(x)).getTime();
+        if (isPeak ? t < peakFrom || t >= peakTo : t < nightFrom) continue;
+        // Trains: one entry per station, all its lines. Trams and buses: one per route.
+        const lineKey = mode === "train" ? `train:${s.name}` : `${mode}:${x.routeShortName}`;
+        const toCity = x.tripTo ? metres({ lat: x.tripTo.lat, lng: x.tripTo.lon }, CBD) < metres(s, CBD) - 500 : false;
+        const dirKey = mode === "train" ? (toCity ? "in" : "out") : x.directionId ?? "0";
+        const k = `${lineKey}|${dirKey}`;
+        let h = here.get(k);
+        if (!h) {
+          h = { mode, route: x.routeShortName ?? "", dirKey, seen: { s, peak: 0, last: 0, heads: new Map(), routes: new Map(), toCity: 0, toOut: 0 } };
+          here.set(k, h);
+        }
+        if (toCity) h.seen.toCity++; else h.seen.toOut++;
+        bump(h.seen.heads, x.headsign);
+        if (!/replacement/i.test(x.routeShortName ?? "")) bump(h.seen.routes, x.routeShortName);
+        if (isPeak) h.seen.peak++;
+        else h.seen.last = Math.max(h.seen.last, t);
+      }
+      for (const [k, h] of here) {
+        const lineKey = k.slice(0, k.lastIndexOf("|"));
+        const line = lines.get(lineKey) ?? { mode: h.mode, route: h.route, dirs: new Map() };
+        lines.set(lineKey, line);
+        const prev = line.dirs.get(h.dirKey);
+        if (!prev || s.d < prev.s.d) line.dirs.set(h.dirKey, h.seen);
+      }
+    }));
   }
-  return result;
+
+  const chosen = [...lines.values()]
+    .map((l) => ({ ...l, dirs: [...l.dirs.values()] }))
+    .filter((l) => l.mode !== "bus" || Math.max(...l.dirs.map((d) => d.peak)) >= MIN_BUS_PEAK)
+    .map((l) => ({ ...l, stop: l.dirs.reduce((a, b) => (b.s.d < a.s.d ? b : a)).s }));
+  if (!chosen.length) return [];
+  const targets = [...new Set(chosen.map((l) => l.stop))];
+  const foot = await osrmTable("foot", [at], targets);
+  const top = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  const merged = (dirs: Seen[]) => dirs.reduce((m, d) => { d.routes.forEach((n, k) => m.set(k, (m.get(k) ?? 0) + n)); return m; }, new Map<string, number>());
+  const order: Mode[] = ["train", "tram", "bus"];
+  return chosen
+    .map((l) => {
+      const i = targets.indexOf(l.stop);
+      return {
+        mode: l.mode,
+        route: l.mode === "train" ? top(merged(l.dirs)).join(" · ") : l.route,
+        stop: { name: l.stop.name, no: l.stop.no, lat: l.stop.lat, lon: l.stop.lng },
+        walk_s: foot.durations[0][i] == null ? null : Math.round(foot.durations[0][i]!),
+        distance_m: Math.round(foot.distances[0][i] ?? l.stop.d),
+        dirs: l.dirs
+          .map((d) => ({ to: top(d.heads)[0] ?? "", city: d.toCity > d.toOut, peak: d.peak, last: d.last ? new Date(d.last).toISOString() : null }))
+          .sort((a, b) => Number(b.city) - Number(a.city) || b.peak - a.peak)
+      };
+    })
+    .filter((l) => l.walk_s != null && l.walk_s <= LIMITS[l.mode].walk_s)
+    .sort((a, b) => order.indexOf(a.mode) - order.indexOf(b.mode) || a.walk_s! - b.walk_s!);
 }
 
-async function fillStops(admin: SupabaseClient, p: Property, at: Point) {
-  if (p.nearest_stops) return;
+async function fillTransit(admin: SupabaseClient, p: Property, at: Point) {
+  const age = p.transit?.version ? Date.now() - new Date(p.transit.version).getTime() : Infinity;
+  if (age < TRANSIT_REFRESH_DAYS * 86_400_000) return;
   try {
-    const stops = await nearestStops(at);
-    await admin.from("properties").update({ nearest_stops: stops }).eq("id", p.id);
+    const lines = await transitLines(at);
+    await admin.from("properties").update({ transit: { version: new Date().toISOString().slice(0, 10), lines } }).eq("id", p.id);
   } catch (err) {
-    console.error("nearest stops failed", p.id, (err as Error).message);
+    console.error("transit lines failed", p.id, (err as Error).message);
   }
 }
 
@@ -433,8 +553,8 @@ async function runProperty(admin: SupabaseClient, id: string, force: boolean) {
   if (!p || p.stage === "rejected") return { skipped: "not an active property" };
   const from = await locateProperty(admin, p, force);
   if (!from) return { geocode: p.geocode_status ?? "no address" };
-  if (force) Object.assign(p, { nearest_stops: null, nearby: null });
-  await fillStops(admin, p, from);
+  if (force) Object.assign(p, { transit: null, nearby: null });
+  await fillTransit(admin, p, from);
   await fillNearby(admin, p, from);
   const places = await placesWithPoints(admin, p.household_id);
   const computed = await computePairs(admin, places.map(({ q, to }) => ({ p, from, q, to })), force);
@@ -469,7 +589,7 @@ async function backfill(admin: SupabaseClient) {
       if (outOfTime()) break;
       const from = await locateProperty(admin, p);
       if (!from) continue;
-      await fillStops(admin, p, from);
+      await fillTransit(admin, p, from);
       await fillNearby(admin, p, from);
       for (const { q, to } of places) pairs.push({ p, from, q, to });
     }
